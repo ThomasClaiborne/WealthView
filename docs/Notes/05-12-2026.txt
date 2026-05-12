@@ -63,4 +63,4 @@ Testing (xUnit):
 
 - IAsyncLifetime -> class that async tests derive from
     has IAsyncLifetime which executes before every test (async constructor)
-    has DisposeAsync that runs after (async destructor)
+    has DisposeAsync that runs after (async destruct)
