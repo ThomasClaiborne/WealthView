@@ -1,0 +1,19 @@
+- ENUMs in DB should match ENUM names in C#
+    EF core expects direct name mapping
+
+- null! -> treat as not null
+    suppress false warnings 
+    shows intent that it will have a value before business logic
+    EF core will populate
+
+- Annotations on DTOs, never on models
+    enforce what front end is allowed to send
+    model already enforces DB structure
+    [RegularExpression] -> checks string against a pattern
+    @ before string treats backslashes as literals 
+
+- ApiController auto validates
+    checks every annotation on incoming DTO before running method
+    auto returns 400 Bad Request with error details
+    mostly for request DTOs since they are coming in
+    response DTOs carry data going out
