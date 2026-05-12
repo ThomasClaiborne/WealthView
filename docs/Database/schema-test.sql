@@ -112,27 +112,37 @@ CREATE TABLE portfolio_snapshot (
 -- Call before every integration test: CALL set_known_good_state();
 -- Wipes all tables and resets to a predictable baseline.
 -- ─────────────────────────────────────────────────────────────
+DROP PROCEDURE IF EXISTS set_known_good_state;
+
 DELIMITER $$
 
 CREATE PROCEDURE set_known_good_state()
 BEGIN
     SET FOREIGN_KEY_CHECKS = 0;
-    TRUNCATE TABLE portfolio_snapshot;
-    TRUNCATE TABLE fund_transfer;
-    TRUNCATE TABLE trade;
-    TRUNCATE TABLE holding;
-    TRUNCATE TABLE portfolio;
-    TRUNCATE TABLE bank_account;
-    TRUNCATE TABLE app_user;
-    TRUNCATE TABLE security;
+
+    DELETE FROM portfolio_snapshot;
+    DELETE FROM fund_transfer;
+    DELETE FROM trade;
+    DELETE FROM holding;
+    DELETE FROM portfolio;
+    DELETE FROM bank_account;
+    DELETE FROM app_user;
+    DELETE FROM security;
+
+    ALTER TABLE portfolio_snapshot AUTO_INCREMENT = 1;
+    ALTER TABLE fund_transfer AUTO_INCREMENT = 1;
+    ALTER TABLE trade AUTO_INCREMENT = 1;
+    ALTER TABLE holding AUTO_INCREMENT = 1;
+    ALTER TABLE portfolio AUTO_INCREMENT = 1;
+    ALTER TABLE bank_account AUTO_INCREMENT = 1;
+    ALTER TABLE app_user AUTO_INCREMENT = 1;
+
     SET FOREIGN_KEY_CHECKS = 1;
 
-    -- Users (plain text passwords until BCrypt is wired up)
     INSERT INTO app_user (app_user_id, username, email, password_hash, first_name, last_name, created_at) VALUES
     (1, 'jdoe',   'john@wealthview.com', 'Test1234!', 'John', 'Doe',   '2026-01-01 09:00:00'),
     (2, 'jsmith', 'jane@wealthview.com', 'Test1234!', 'Jane', 'Smith', '2026-01-01 09:00:00');
 
-    -- Securities
     INSERT INTO security (ticker, company_name, asset_class, last_price, price_fetched_at) VALUES
     ('AAPL',  'Apple Inc.',                     'Equity',       NULL, NULL),
     ('MSFT',  'Microsoft Corp.',                'Equity',       NULL, NULL),
@@ -144,39 +154,31 @@ BEGIN
     ('TLT',   'iShares 20+ Yr Bond ETF',        'FixedIncome',  NULL, NULL),
     ('BND',   'Vanguard Total Bond Market ETF', 'FixedIncome',  NULL, NULL);
 
-    -- Bank accounts
     INSERT INTO bank_account (bank_account_id, app_user_id, bank_name, nickname, balance, is_active, last_activated_at, created_at) VALUES
-    (1, 1, 'Chime',          NULL,               5000.0000, TRUE, '2026-01-01 09:00:00', '2026-01-01 09:00:00'),
-    (2, 2, 'Chase',          'Personal Checking',10000.0000, TRUE, '2026-01-01 09:00:00', '2026-01-01 09:00:00'),
-    (3, 2, 'BankOfAmerica',  'Savings',           5200.0000, TRUE, '2026-01-01 09:00:00', '2026-01-01 09:00:00'),
-    (4, 2, 'Chime',          NULL,                1800.0000, TRUE, '2026-01-01 09:00:00', '2026-01-01 09:00:00');
+    (1, 1, 'Chime',         NULL,                5000.0000, TRUE, '2026-01-01 09:00:00', '2026-01-01 09:00:00'),
+    (2, 2, 'Chase',         'Personal Checking', 10000.0000, TRUE, '2026-01-01 09:00:00', '2026-01-01 09:00:00'),
+    (3, 2, 'BankOfAmerica', 'Savings',            5200.0000, TRUE, '2026-01-01 09:00:00', '2026-01-01 09:00:00'),
+    (4, 2, 'Chime',         NULL,                 1800.0000, TRUE, '2026-01-01 09:00:00', '2026-01-01 09:00:00');
 
-    -- Portfolios
-    -- jdoe: deposited $2500, bought 10 AAPL @ $165 = $1650, cash left = $850
-    -- jsmith: deposited $5000, bought 5 SPY @ $430 + 8 TLT @ $100 = $2950, cash left = $2050
     INSERT INTO portfolio (portfolio_id, app_user_id, cash_balance, created_at) VALUES
     (1, 1,  850.0000, '2026-01-01 09:00:00'),
     (2, 2, 2050.0000, '2026-01-01 09:00:00');
 
-    -- Holdings
     INSERT INTO holding (holding_id, portfolio_id, ticker, quantity, avg_cost, created_at, updated_at) VALUES
     (1, 1, 'AAPL', 10.0000, 165.0000, '2026-01-02 10:00:00', '2026-01-02 10:00:00'),
     (2, 2, 'SPY',   5.0000, 430.0000, '2026-01-02 10:00:00', '2026-01-02 10:00:00'),
     (3, 2, 'TLT',   8.0000, 100.0000, '2026-01-02 10:00:00', '2026-01-02 10:00:00');
 
-    -- Trades
     INSERT INTO trade (trade_id, portfolio_id, ticker, trade_type, quantity, price_per_share, total_value, executed_at) VALUES
     (1, 1, 'AAPL', 'Buy', 10.0000, 165.0000, 1650.0000, '2026-01-02 10:00:00'),
     (2, 2, 'SPY',  'Buy',  5.0000, 430.0000, 2150.0000, '2026-01-02 10:00:00'),
     (3, 2, 'TLT',  'Buy',  8.0000, 100.0000,  800.0000, '2026-01-02 10:00:00');
 
-    -- Fund transfers
     INSERT INTO fund_transfer (fund_transfer_id, portfolio_id, bank_account_id, direction, amount, status, created_at, resolved_at) VALUES
     (1, 1, 1, 'Deposit',    2500.0000, 'Approved', '2026-01-01 10:00:00', '2026-01-01 10:01:00'),
     (2, 2, 2, 'Deposit',    5000.0000, 'Approved', '2026-01-01 10:00:00', '2026-01-01 10:01:00'),
     (3, 2, 3, 'Withdrawal', 1000.0000, 'Pending',  '2026-01-05 09:00:00', NULL);
 
-    -- Portfolio snapshots
     INSERT INTO portfolio_snapshot (snapshot_id, portfolio_id, snapshot_date, total_value) VALUES
     (1, 1, '2026-01-02', 2500.0000),
     (2, 1, '2026-01-03', 2650.0000),

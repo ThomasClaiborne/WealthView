@@ -1,4 +1,5 @@
-CREATE DATABASE IF NOT EXISTS wealthview;
+DROP DATABASE IF EXISTS wealthview;
+CREATE DATABASE wealthview;
 USE wealthview;
 
 CREATE TABLE app_user (
