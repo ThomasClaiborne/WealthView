@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { ChangeDetectorRef, Component, inject } from '@angular/core';
 import { FormBuilder, Validators, ReactiveFormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../core/auth.service';
@@ -13,6 +13,7 @@ export class Register {
     private auth   = inject(AuthService);
     private router = inject(Router);
     private fb     = inject(FormBuilder);
+    private cdr = inject(ChangeDetectorRef);
 
     form = this.fb.group({
         firstName: ['', [Validators.required, Validators.maxLength(50)]],
@@ -44,6 +45,7 @@ export class Register {
                     this.errors = (Object.values(err.error.errors) as string[][]).flat();
                 else
                     this.errors = ['Registration failed. Please try again.'];
+                this.cdr.markForCheck();
             }
         });
     }
