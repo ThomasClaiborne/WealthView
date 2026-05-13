@@ -1,0 +1,69 @@
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card shadow-sm">
+                <div class="card-body p-4">
+                    <h4 class="mb-4">Create Account</h4>
+
+                    @if (errors.length) {
+                        <div class="alert alert-danger">
+                            @for (e of errors; track e) { <div>{{ e }}</div> }
+                        </div>
+                    }
+
+                    <form [formGroup]="form" (ngSubmit)="submit()">
+                        <div class="row">
+                            <div class="col mb-3">
+                                <label class="form-label">First Name</label>
+                                <input type="text" formControlName="firstName" class="form-control"
+                                    [class.is-invalid]="f('firstName')?.invalid && f('firstName')?.touched">
+                                <div class="invalid-feedback">Required.</div>
+                            </div>
+                            <div class="col mb-3">
+                                <label class="form-label">Last Name</label>
+                                <input type="text" formControlName="lastName" class="form-control"
+                                    [class.is-invalid]="f('lastName')?.invalid && f('lastName')?.touched">
+                                <div class="invalid-feedback">Required.</div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Username</label>
+                            <input type="text" formControlName="username" class="form-control"
+                                [class.is-invalid]="f('username')?.invalid && f('username')?.touched">
+                            <div class="invalid-feedback">
+                                @if (f('username')?.hasError('minlength') || f('username')?.hasError('maxlength')) {
+                                    Must be 3–30 characters.
+                                } @else if (f('username')?.hasError('pattern')) {
+                                    Letters, numbers, and underscores only.
+                                } @else { Required. }
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Email</label>
+                            <input type="email" formControlName="email" class="form-control"
+                                [class.is-invalid]="f('email')?.invalid && f('email')?.touched">
+                            <div class="invalid-feedback">Enter a valid email.</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Password</label>
+                            <input type="password" formControlName="password" class="form-control"
+                                [class.is-invalid]="f('password')?.invalid && f('password')?.touched">
+                            <div class="invalid-feedback">Minimum 8 characters.</div>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary w-100" [disabled]="loading">
+                            {{ loading ? 'Creating account…' : 'Create Account' }}
+                        </button>
+                    </form>
+
+                    <p class="text-center mt-3 mb-0 small">
+                        Already have an account? <a routerLink="/login">Log in</a>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
