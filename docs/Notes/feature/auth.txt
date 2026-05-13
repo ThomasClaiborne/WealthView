@@ -1,0 +1,168 @@
+
+C# / ASP.NET Core
+
+- ENUMs in DB should match ENUM names in C#
+    EF core expects direct name mapping
+
+- null! → treat as not null
+    suppress false warnings 
+    shows intent that it will have a value before business logic
+    EF core will populate
+
+- Annotations on DTOs, never on models
+    enforce what front end is allowed to send
+    model already enforces DB structure
+    [RegularExpression] → checks string against a pattern
+    @ before string treats backslashes as literals 
+
+- ApiController auto validates
+    checks every annotation on incoming DTO before running method
+    auto returns 400 Bad Request with error details
+    mostly for request DTOs since they are coming in
+    response DTOs carry data going out
+
+- async / await / Task<T>
+    async marks a method as asynchronous — it can pause and resume
+    await pauses execution at that line until the async operation finishes
+        without blocking the thread (server can handle other requests while waiting)
+    Task<T> is the return type wrapper — like a promise that will eventually hold T
+    Task<Result<AuthResponse>> means: "this will eventually give you a Result<AuthResponse>"
+
+- Result<T> pattern
+    wrapper that carries either a success payload OR an error type + messages
+    every service method returns Result<T> — controller reads result.Type and maps to HTTP status
+    keeps business logic errors separate from exceptions
+    prevents services from throwing exceptions for expected failures (duplicate username etc.)
+
+- BCrypt (password hashing)
+    one-way hash — mathematically impossible to reverse back to the original password
+    BCrypt.HashPassword(plainText) → generates a hash string like $2a$11$saltXXX...hashXXX
+        $2a$ = BCrypt version, $11$ = work factor, next 22 chars = random salt, rest = hash
+    BCrypt.Verify(plainText, storedHash) → re-hashes the input using the salt embedded in storedHash
+        compares result to the stored hash — returns true or false
+        you never decrypt — you just re-hash and compare
+    work factor (default 11) = number of rounds — each +1 doubles compute time
+        makes brute force attacks computationally infeasible
+    salting = random data added before hashing so two identical passwords produce different hashes
+        prevents rainbow table attacks (pre-computed hash lookup tables)
+    plain text password never leaves the Register method after hashing
+
+- JWT (JSON Web Token)
+    a signed string the server gives the client on login — proves identity on future requests
+    three parts separated by dots: header.payload.signature
+        header: algorithm used (HS256 = HMAC-SHA256)
+        payload: claims — data baked in (userId, username, email, expiry)
+        signature: HMAC-SHA256(header + "." + payload, secretKey) — proves the server signed it
+    server signs with secret key → client stores token → client sends in every request header
+    server verifies signature on every protected request — if signature is valid, trusts the claims
+    stateless: server stores nothing — the token is self-contained proof of identity
+
+- GenerateToken (what it actually does step by step)
+    1. reads Jwt:Secret from appsettings.json, converts to bytes
+    2. SymmetricSecurityKey wraps those bytes as a cryptographic key object
+    3. SigningCredentials combines the key with the HMAC-SHA256 algorithm
+    4. Claims array = the payload data to embed in the token (userId, username, email)
+    5. JwtSecurityToken assembles the full token (issuer, audience, claims, expiry, credentials)
+    6. JwtSecurityTokenHandler().WriteToken(token) serializes it to the final dot-separated string
+    NuGet dependency: Microsoft.AspNetCore.Authentication.JwtBearer (brings in token classes)
+    on every protected request: JWT middleware reads the Authorization header, verifies the
+        signature against the same secret, and if valid, populates User.Claims automatically
+
+- ToAuthResponse (response mapper)
+    maps the internal AppUser model + token string into the AuthResponse DTO shape
+    DTOs and models are different objects — the model has PasswordHash, the DTO does not
+    this pattern ensures sensitive fields on the model are never accidentally sent to the frontend
+
+- Transaction (BeginTransactionAsync)
+    wraps multiple DB operations into one atomic unit — all succeed or all roll back
+    used in AuthService.Register because user + portfolio must be created together
+    if portfolio creation fails after user was inserted, transaction rolls back the user too
+    without a transaction, a crash between the two inserts would leave a user with no portfolio
+    EF Core: BeginTransactionAsync() → do work → CommitAsync() or RollbackAsync()
+    Java Dev10 equivalent: @Transactional annotation on a service method
+
+
+─────────────────────────────────────────────────────────────────────────────────────
+
+EF Core:
+
+- DbSet<T> is EF Core handle to a table
+    equivalent to running SELECT * FROM T 
+    every LINQ query translates to SQL automatically
+
+- OnModelCreating for configuring model <→ db mapping
+    had modelBuilder argument
+    override definition from base class (DbContext)
+    EF Core conventions often dont match schema
+
+- FluentAPI → method chaining to define rules with modelBuilder
+    each method returns builder object to chain
+    EF Core cant tell which has FK with one-to-one relationships
+
+- FirstOrDefaultAsync → queries database for first row matching condition
+    async LINQ extension method by EF Core
+
+- SaveChangesAsync → takes everything staged, generates SQL and executes against DB
+    method from DbContext itself
+    .Add(), .Remove(), modifications to tracked objects
+    like a commit button but to the DB
+
+- .HasColumnType("decimal(18,4)")
+    tells EF Core to use MySQL's DECIMAL type with 18 total digits and 4 after the decimal point
+    without this, EF Core might use float or double — both introduce rounding errors for money
+    DECIMAL is exact arithmetic: 0.1 + 0.2 = 0.3 exactly, not 0.30000000000000004
+    18 = total significant digits (14 before decimal + 4 after)
+
+- .HasConversion<string>() on enum properties
+    EF Core stores enums as integers by default (0, 1, 2...)
+    this tells EF Core to store the enum NAME as a string instead ("Buy", "Sell")
+    required so the DB value matches what MySQL ENUM column expects
+    without it: DB would have 0 and 1, not "Buy" and "Sell"
+
+- Scoped lifetime (AddScoped)
+    AppDbContext is registered as scoped — one instance per HTTP request, then discarded
+    every repository and service that depends on AppDbContext must also be scoped
+    this is why you use AddScoped<IAuthService, AuthService>() — not AddSingleton
+    AddSingleton would hold one AppDbContext forever — causes threading issues and stale data
+
+
+─────────────────────────────────────────────────────────────────────────────────────
+
+Testing (xUnit):
+
+- TestDbContextFactory → resuable helper class that creates configured AppDbContext pointed to test DB
+    every test calls it so its not repeated every setup
+    reads connection string from the test projects 
+
+- DatabaseTestCollection → used to disable parallel execution of database tests
+    CollectionDefinition declare a name for test collection over dummy class (DatabaseTestCollection)
+    Collection placed above test classes 
+    force multiple classes in this collection to run test in series
+
+- IAsyncLifetime → class that async tests derive from
+    has IAsyncLifetime which executes before every test (async constructor)
+    has DisposeAsync that runs after (async destruct)
+
+- Unit test vs integration test
+    unit test: tests one class in isolation — dependencies are mocked (Moq)
+        fast, no DB, no external dependencies
+        example: AuthServiceTest — uses InMemory DB, no real MySQL
+    integration test: tests against real infrastructure (real DB, real network)
+        slower, requires setup (KnownGoodState)
+        example: EfUserRepositoryTest — hits wealthview_test via real MySQL connection
+
+- InMemory database (service tests)
+    EF Core provider that runs entirely in memory — no MySQL required
+    used for service tests because we're testing business logic, not SQL
+    each test gets a fresh DB via Guid.NewGuid().ToString() as the DB name
+    transactions are no-ops (commit/rollback do nothing) — fine for testing logic
+    ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
+        suppresses the exception EF Core throws when you call BeginTransactionAsync on InMemory
+        the transaction still "runs" — it just doesn't actually do anything
+
+- KnownGoodState procedure
+    stored procedure in wealthview_test that resets all data to a predictable baseline
+    called in InitializeAsync() before every test
+    DELETE instead of TRUNCATE (TRUNCATE has inconsistent FK behavior in MySQL 8+)
+    ALTER TABLE ... AUTO_INCREMENT = 1 after deletes to reset ID counters
+    explicit IDs in inserts (1, 2, 3...) so every test can assert exact IDs
