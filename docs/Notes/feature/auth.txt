@@ -166,3 +166,338 @@ Testing (xUnit):
     DELETE instead of TRUNCATE (TRUNCATE has inconsistent FK behavior in MySQL 8+)
     ALTER TABLE ... AUTO_INCREMENT = 1 after deletes to reset ID counters
     explicit IDs in inserts (1, 2, 3...) so every test can assert exact IDs
+
+
+─────────────────────────────────────────────────────────────────────────────────────
+
+
+Angular:
+
+    Auth Service
+
+        - @Injectable({ providedIn: 'root' })
+            decorator that registers this class with Angular's DI container
+            providedIn: 'root' = one instance created for the entire app (singleton)
+            any component that calls inject(AuthService) gets the SAME instance
+            without this decorator it is just a plain TypeScript class — Angular doesn't know it exists
+            React equivalent: a Context value created at the App level
+
+        - BehaviorSubject<AppUser | null>
+            from RxJS — acts as both a holder of state AND a broadcaster of changes
+            holds a current value at all times (starts as null = nobody logged in)
+            when .next(newValue) is called → every subscriber immediately receives the new value
+            React equivalent: the state inside useContext — when it changes, everything subscribed re-renders
+            null = logged out  /  AppUser object = logged in
+
+        - .asObservable()
+            exposes the BehaviorSubject as a read-only Observable
+            other code can subscribe and listen for changes but cannot push new values
+            only the service itself can call .next() — the component just listens
+            currentUser$ is the public-facing Observable — used in Sidebar to watch for changes
+
+        - constructor()
+            runs once when Angular creates the service — at app startup
+            checks localStorage for a saved session (token + currentUser)
+            if found: calls userSubject.next(parsedUser) to restore logged-in state
+            this is session re-hydration — makes the app remember who was logged in after a page refresh
+
+        - register() / login()
+            call the API and return the Observable to the caller (they don't subscribe themselves)
+            .pipe(tap(res => this.setSession(res))) — tap is a side effect
+                when the call succeeds: run setSession to save token + user, then pass the response through
+                the component subscribes and uses the response to navigate
+            returning the Observable instead of subscribing internally
+                lets the component react to success/failure and navigate accordingly
+                React equivalent: returning the fetch Promise instead of awaiting it inside the service
+
+        - setSession(res)
+            private — only called by register() and login()
+            extracts user fields from AuthResponse → creates AppUser (no token, no password)
+            localStorage.setItem('token', ...) — interceptor reads this for every future request
+            localStorage.setItem('currentUser', ...) — re-hydration reads this on page refresh
+            userSubject.next(user) — broadcasts the new logged-in user to all subscribers
+
+        - logout()
+            removes token and currentUser from localStorage
+            userSubject.next(null) — broadcasts logged-out state to all subscribers
+            Sidebar sees this change and hides the user name block
+            router.navigate(['/']) sends the user to the landing page
+
+        - isLoggedIn()
+            reads userSubject.value — synchronously gets the current value without subscribing
+            returns true if a user is present, false if null
+            used by guards to make routing decisions immediately
+
+    Guard
+
+        - CanActivateFn
+            a function Angular Router calls before activating any route that uses canActivate: [...]
+            return true          → allow navigation — user reaches the route
+            return false         → block navigation — user stays where they are
+            return UrlTree       → redirect — Angular cancels the original nav and goes somewhere else
+
+        - router.createUrlTree(['/login'])
+            creates a UrlTree — Angular Router's internal representation of a destination URL
+            when returned from a guard it acts as a redirect instruction
+            why not router.navigate(['/login'])?
+                navigate() fires a new navigation event in parallel — can cause race conditions
+                returning a UrlTree tells the Router "use THIS as the destination instead"
+                Angular cancels the original navigation and follows the UrlTree cleanly
+
+        - authGuard (protects dashboard and all authenticated pages)
+            auth.isLoggedIn() returns true  → return true   → route activates, page loads
+            auth.isLoggedIn() returns false → return router.createUrlTree(['/login']) → redirected
+
+        - publicOnlyGuard (protects login, register, landing from logged-in users)
+            auth.isLoggedIn() returns true  → return router.createUrlTree(['/dashboard']) → redirected
+            auth.isLoggedIn() returns false → return true   → route activates, page loads
+
+        - the || shortcut in the guard functions
+            return auth.isLoggedIn() || router.createUrlTree(['/login'])
+            if isLoggedIn() is true  → true || anything = true (right side never evaluated)
+            if isLoggedIn() is false → false || createUrlTree → returns the UrlTree
+            concise way to express "allow if logged in, otherwise redirect"
+
+        - canActivate on MainLayout route
+            applied to the parent layout, not each child individually
+            all child routes (dashboard, bank-accounts, etc.) inherit the guard
+            one guard protects the entire authenticated section at once
+
+    interceptor 
+
+        - what it does
+            runs automatically on every outbound HTTP request in the entire app
+            reads the token from AuthService and attaches it to the Authorization header
+            no component ever manually sets auth headers — it is handled here in one place
+
+        - HttpInterceptorFn signature
+            (req, next) => Observable<HttpEvent<unknown>>
+            req  = the outgoing HTTP request object
+            next = a function that forwards the request to the next handler (then to the network)
+
+        - req.clone({ setHeaders: { Authorization: `Bearer ${token}` } })
+            HTTP request objects are immutable — you cannot modify them directly
+            .clone() creates a copy with your changes applied
+            Bearer ${token} is the format the ASP.NET JWT middleware expects in the Authorization header
+
+        - flow of every HTTP call
+            component calls HttpClient.post(...)
+                ↓
+            authInterceptor runs
+                ↓ (if token exists)
+            new request created with Authorization header added
+                ↓
+            next(newReq) sends it to the network
+                ↓
+            response comes back to the component's .subscribe()
+
+        - if no token
+            return next(req) — passes the original request through unchanged
+            unauthenticated requests (register, login) go through without modification
+
+        - registration in app.config.ts
+            provideHttpClient(withInterceptors([authInterceptor]))
+            registered once — applies to every HttpClient call in the entire app automatically
+
+    AppUser Vs AuthResponse
+
+        - AuthResponse — shape of what the backend sends back on login/register
+            token, appUserId, username, email, firstName, lastName
+            the token is included because the frontend needs it immediately after login
+
+        - AppUser — shape of what we store and share across the app
+            appUserId, username, email, firstName, lastName
+            no token field — token is stored separately in localStorage
+
+        - why two separate interfaces
+            they represent different concerns
+            token = a credential for making future requests — stored alone, read only by the interceptor
+            user = identity information — stored for display (name in sidebar), guards (isLoggedIn), etc.
+            mixing them would mean BehaviorSubject<AuthResponse | null> carries the token everywhere
+                every component that subscribes sees the token even though they never need it
+                separation of concerns — each piece of data lives where it belongs
+
+        - setSession() splits them
+            takes AuthResponse (has token)
+            stores token alone → localStorage('token') → read by interceptor
+            stores AppUser alone → localStorage('currentUser') → read by re-hydration + sidebar
+            broadcasts AppUser → userSubject.next(user) → BehaviorSubject holds user, not the token
+
+    Component Anatomy
+
+        - @Component decorator
+            metadata that tells Angular everything it needs to know about this component
+            Angular reads this at build time to compile the component correctly
+
+        - selector: 'app-login'
+            the custom HTML tag that represents this component: <app-login />
+            used when embedding one component inside another component's template
+            less relevant when routes load components — routing uses the class reference, not the tag
+
+        - standalone: true
+            this component manages its own dependencies — no NgModule needed
+            Angular 17+ default
+            means: everything this component's template uses must be in its own imports array
+
+        - imports: [ReactiveFormsModule, RouterLink]
+            declares what this component's template needs
+            ReactiveFormsModule → enables [formGroup] and formControlName attributes in the template
+            RouterLink → enables routerLink="..." attribute in the template
+            RouterLinkActive → enables routerLinkActive="..." attribute
+            forgetting one here but using it in the template → Angular throws a compile error
+
+        - templateUrl: './login.html'
+            path to the HTML file for this component
+            Angular compiles the .ts class and the .html together — they are one component at runtime
+            alternative: template: '<div>inline html here</div>' — used for very simple components
+
+        - does importing a component grab its HTML too?
+            import { Login } from './auth/login'  ← imports the TypeScript class Login
+            Angular sees that Login has templateUrl: './login.html'
+            at build time Angular automatically includes the HTML as part of the component bundle
+            you never import the HTML file separately — Angular handles that connection
+            when you put Login in routes or in imports:[] — Angular uses the class as a reference
+            and knows to render its template when that component is activated
+
+    Component Classes with code
+
+        - AuthLayout and MainLayout have empty classes
+            export class AuthLayout {}
+            export class MainLayout {}
+            no code because they have nothing to do at runtime
+            they are shell components — just render a navbar or sidebar plus <router-outlet>
+            all logic lives in the HTML (static structure, no state, no subscriptions, no methods)
+            the class must exist because Angular requires one — but it has nothing to do
+
+        - Sidebar has code because it has runtime needs
+            needs to know who is logged in → subscribe to currentUser$
+            needs to show the user's name → store user as a property
+            needs to respond to auth state changes → subscribe keeps user in sync
+            needs a logout method → called from the template button click
+            rule: if the component needs state, methods, subscriptions, or injected services → it has code
+                if the component is purely static HTML structure → the class is empty
+
+    Sidebar Subscription
+
+
+        - this.sub = this.authService.currentUser$.subscribe(u => this.user = u)
+            subscribes to the Observable exposed by AuthService's BehaviorSubject
+            u => this.user = u  is the callback — runs every time a new value is emitted
+            immediately runs with the current value (BehaviorSubject always emits current on subscribe)
+            runs again whenever userSubject.next(something) is called anywhere in the app
+
+        - what triggers it
+            login()  → setSession() → userSubject.next(user)   → u = user   → this.user = user
+            logout() → userSubject.next(null)                   → u = null   → this.user = null
+
+        - the template reacts
+            @if (user) { show name block }
+            when this.user goes null → block disappears
+            when this.user becomes a user object → name and username appear
+
+        - why store in sub and unsubscribe
+            sub is a Subscription object — a handle to the active subscription
+            if the sidebar component is destroyed and you don't unsubscribe
+                the subscription keeps running in memory forever → memory leak
+            ngOnDestroy() { this.sub.unsubscribe() }
+                runs when Angular removes this component from the DOM
+                cleans up the subscription properly
+
+    Form builder
+    
+        - inject(FormBuilder)
+            FormBuilder is an Angular service — a helper for creating form structures
+            inject() gets the singleton from Angular's DI container (same as inject(AuthService))
+
+        - this.fb.group({ fieldName: [initialValue, [validators]] })
+            creates a FormGroup — a container that manages a set of related form controls together
+            each key = a field, each value = array of [startingValue, [validator functions]]
+            FormGroup tracks for every field: current value, validity status, touched/dirty state
+            form.value → { firstName: 'Thomas', lastName: 'Claiborne', ... }
+            form.invalid → true if ANY field fails any validator
+            form.valid → true only when ALL fields pass ALL validators
+
+        - Validators
+            functions that Angular runs on every keystroke and return null (valid) or an error object
+            Validators.required    → fails if the value is empty
+            Validators.minLength(3)→ fails if value.length < 3
+            Validators.maxLength(30)→ fails if value.length > 30
+            Validators.email       → fails if not a valid email format
+            Validators.pattern('^[a-zA-Z0-9_]+$') → fails if value contains anything outside the pattern
+            multiple in an array → all must pass for the field to be valid
+
+        - f('username')?.hasError('minlength')
+            f() is a helper method: return this.form.get(fieldName)
+            .get() returns the FormControl for that field
+            .hasError('key') checks if that specific validator failed
+            used in the template to show different messages for different failure reasons
+            the ?. is optional chaining — safely handles the case where the control doesn't exist
+
+        - f('username')?.invalid && f('username')?.touched
+            .invalid → at least one validator is failing
+            .touched → user has clicked into and out of this field at least once
+            combining them: only show the red border AFTER the user has interacted
+            without .touched: every field shows as invalid the moment the form loads (bad UX)
+
+        - loading property
+            set to true before the HTTP call, false in the error callback
+            [disabled]="loading" prevents the user from clicking submit again while waiting
+            button text changes: 'Create Account' → 'Creating account…' via {{ loading ? ... : ... }}
+
+        - error (Login) vs errors: string[] (Register)
+            Login fails one way at a time: "Invalid credentials." — one message, one string
+            Register can fail multiple ways at once:
+                DTO validation from [ApiController] returns ALL failed fields simultaneously
+                service can return username taken, email taken as separate messages
+                string[] holds multiple messages and renders each in its own <div>
+            register error handler:
+                Array.isArray(err.error) → service returned ['Username is already taken.']
+                err.error?.errors → [ApiController] returned ProblemDetails with { Field: ['msg'] }
+                    Object.values(...).flat() flattens { Email: ['bad email'], Username: ['required'] }
+                    into ['bad email', 'required'] — one flat array of all error strings
+
+        - where errors render in the template
+            @if (errors.length) block sits ABOVE the form fields
+            only appears when the array has at least one item
+            each string in the array gets its own <div> via @for
+            disappears on next submit attempt because errors = [] resets it first
+
+    Template Control flow
+
+        @if (condition) { ... }
+            renders the block only when condition is truthy
+            condition is evaluated against the component's properties and methods
+            replaces the old *ngIf="condition" syntax
+            @if (error) { ... } @else { ... }  — else branch when needed
+
+        - @for (item of list; track item) { ... }
+            iterates over an array and renders the block once per item
+            item is the loop variable — available inside the block as {{ item }}
+            track item (or track item.id) tells Angular how to identify items for efficient DOM updates
+                without track: Angular re-renders the entire list on every change
+                with track: Angular only updates the items that actually changed
+            replaces the old *ngFor="let item of list; trackBy: fn" syntax
+
+    Inject() vs import
+
+        - import at the top of the file
+            import { AuthService } from '../core/auth.service'
+            TypeScript-level — tells the compiler "this type exists at this path"
+            creates NO instance, allocates NO memory, does NOTHING at runtime
+            required for type checking and IDE autocomplete
+
+        - inject(AuthService)
+            private auth = inject(AuthService)
+            Angular-level — asks Angular's DI container for the live instance of AuthService
+            Angular looks up its registry, finds the singleton it already created, returns it
+            if you called new AuthService() instead:
+                you'd get a completely fresh instance with an empty BehaviorSubject
+                no shared state, no connection to the session or other components
+                defeats the entire point of a singleton service
+            inject() gives you the same instance everyone else uses — the one with real state in it
+
+        - both are always needed
+            import → TypeScript can understand the type (compile time)
+            inject() → you get the actual running instance (runtime)
+            having the import without inject() = TypeScript knows the shape but you have no instance
+            having inject() without the import = TypeScript doesn't know the type → compile error
