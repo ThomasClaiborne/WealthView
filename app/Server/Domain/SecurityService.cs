@@ -35,6 +35,7 @@ public class SecurityService : ISecurityService
                     security.LastPrice      = freshPrice.Value;
                     security.PriceFetchedAt = DateTime.UtcNow;
                 }
+                await Task.Delay(1200);
             }
         }
 
