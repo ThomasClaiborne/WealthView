@@ -7,6 +7,7 @@ import { Landing }     from './auth/landing';
 import { Login }       from './auth/login';
 import { Register }    from './auth/register';
 import { Dashboard }   from './dashboard/dashboard';
+import { Trading }     from './trading/trading';
 
 export const routes: Routes = [
     {
@@ -23,7 +24,8 @@ export const routes: Routes = [
         component: MainLayout,
         canActivate: [authGuard],
         children: [
-            { path: 'dashboard', component: Dashboard }
+            { path: 'dashboard', component: Dashboard },
+            { path: 'trading', component: Trading }
         ]
     },
     { path: '**', redirectTo: '' }

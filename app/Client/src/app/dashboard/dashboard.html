@@ -1,0 +1,34 @@
+<div class="container py-4">
+  <h2 class="mb-4">Dashboard</h2>
+
+  <div *ngIf="errorMessage" class="alert alert-danger">{{ errorMessage }}</div>
+
+  <div *ngIf="portfolio" class="row g-3">
+    <div class="col-md-4">
+      <div class="card">
+        <div class="card-body">
+          <h6 class="card-subtitle text-muted mb-1">Cash Balance</h6>
+          <p class="card-text fs-4">${{ portfolio.cashBalance | number:'1.2-2' }}</p>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card">
+        <div class="card-body">
+          <h6 class="card-subtitle text-muted mb-1">Total Value</h6>
+          <p class="card-text fs-4">${{ portfolio.totalValue | number:'1.2-2' }}</p>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card">
+        <div class="card-body">
+          <h6 class="card-subtitle text-muted mb-1">Holdings</h6>
+          <p class="card-text fs-4">{{ portfolio.holdingCount }}</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div *ngIf="!portfolio && !errorMessage" class="text-muted">Loading...</div>
+</div>

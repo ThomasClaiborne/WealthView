@@ -1,0 +1,45 @@
+@baseUrl = http://localhost:5266
+
+### Step 1 — Login to get a token (run this first)
+# @name login
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "credential": "tclaiborne",
+  "password": "Password1!"
+}
+
+###
+
+### Step 2 — Get all securities with live prices → expect 200 + array of 9
+GET {{baseUrl}}/api/securities
+Authorization: Bearer {{login.response.body.token}}
+
+###
+
+### Step 3 — Get single security → expect 200 + security object with price
+GET {{baseUrl}}/api/securities/AAPL
+Authorization: Bearer {{login.response.body.token}}
+
+###
+
+### Step 4 — Get unknown ticker → expect 404
+GET {{baseUrl}}/api/securities/FAKE
+Authorization: Bearer {{login.response.body.token}}
+
+###
+
+### Step 5 — Get portfolio → expect 200 + cash balance + TotalValue = CashBalance
+GET {{baseUrl}}/api/portfolio
+Authorization: Bearer {{login.response.body.token}}
+
+###
+
+### Step 6 — Hit securities without token → expect 401
+GET {{baseUrl}}/api/securities
+
+###
+
+### Step 7 — Hit portfolio without token → expect 401
+GET {{baseUrl}}/api/portfolio

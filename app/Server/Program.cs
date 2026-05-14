@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -16,9 +17,16 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 // ── Repositories ──────────────────────────────────────────────────────
 builder.Services.AddScoped<IUserRepository,      EfUserRepository>();
 builder.Services.AddScoped<IPortfolioRepository, EfPortfolioRepository>();
+builder.Services.AddScoped<ISecurityRepository,  EfSecurityRepository>(); 
 
 // ── Services ──────────────────────────────────────────────────────────
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IPortfolioService, PortfolioService>();
+builder.Services.AddScoped<ISecurityService, SecurityService>();
+
+// ── Http ─────────────────────────────────────────────────────────────
+
+builder.Services.AddHttpClient<IMarketDataService, MarketDataService>(); 
 
 // ── JWT Authentication ────────────────────────────────────────────────
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -44,7 +52,9 @@ builder.Services.AddCors(options =>
               .AllowAnyHeader()
               .AllowAnyMethod()));
 
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.AddOpenApi();
 
 // ── Pipeline ──────────────────────────────────────────────────────────
