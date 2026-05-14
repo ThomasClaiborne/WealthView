@@ -1,0 +1,47 @@
+
+xUnit:
+
+- xUnit test naming convention → MethodName_ExpectedResult_WhenCondition
+    three parts separated by underscores
+    MethodName   = the method being tested (GetByTicker, UpdatePrice, Register)
+    ExpectedResult = what the outcome should be (ReturnsNull, ReturnsFalse, ReturnsSuccess)
+    WhenCondition = the scenario being tested (WhenTickerNotFound, WhenUserExists)
+    examples:
+        GetByTicker_ReturnsNull_WhenTickerNotFound
+        UpdatePrice_ReturnsFalse_WhenTickerNotFound
+        Register_ReturnsInvalid_WhenUsernameIsTaken
+    Java/JUnit equivalent: shouldReturnNullWhenTickerNotFound (camelCase, no underscores)
+    why the difference: .NET community adopted PascalCase + underscores so test names
+        read naturally in test runner output — the underscores create visual separation
+        that makes scanning a test list easier than unbroken camelCase
+
+─────────────────────────────────────────────────────────────────────────────────────
+
+EF Core:
+
+- .AsNoTracking()
+    added to read-only queries that never need to be updated by SaveChanges
+    tells EF Core to not track the returned entities in its change tracker
+    the entities can be modified in memory without risk of unintended DB writes
+    more efficient — EF Core skips the overhead of setting up change tracking
+    usage: _db.Securities.AsNoTracking().OrderBy(s => s.Ticker).ToListAsync()
+    use when: you know the results are for reading/display only, not modification
+    do not use when: you intend to modify and save the entity back to the DB
+
+- ExecuteUpdateAsync
+    runs a direct SQL UPDATE without loading the entity into memory first
+    bypasses EF Core's change tracker entirely — no entity is staged or tracked
+    returns int (number of rows affected) not the modified entity
+    more efficient than fetch → modify → SaveChanges for single-field updates
+    usage: _db.Securities.Where(s => s.Ticker == ticker).ExecuteUpdateAsync(...)
+    limitation: not supported by the InMemory test provider
+        → for service-level unit tests, mock the repository instead of using InMemory
+        → repository integration tests (real MySQL) prove it works correctly
+
+- .SetProperty(x => x.LastPrice, price)
+    used inside ExecuteUpdateAsync to specify which column to update and what value
+    each SetProperty call is one column update
+    chained with additional .SetProperty calls for multiple columns
+    usage: s.SetProperty(x => x.LastPrice, price).SetProperty(x => x.PriceFetchedAt, DateTime.UtcNow)
+    lambda x => x.LastPrice tells EF Core which property/column to target
+    the second argument is the new value
