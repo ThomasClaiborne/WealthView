@@ -1,19 +1,32 @@
+C# / ASP.NET Core:
 
-xUnit:
+- JsonStringEnumConverter
+    added to AddControllers().AddJsonOptions() in Program.cs
+    tells System.Text.Json to serialize enum values as their string name not integer
+    without it: AssetClass returns 0, 1, 2 instead of "Equity", "ETF", "FixedIncome"
+    applied globally — every controller endpoint in the app serializes enums as strings
+    frontend receives readable strings, not magic numbers
 
-- xUnit test naming convention → MethodName_ExpectedResult_WhenCondition
-    three parts separated by underscores
-    MethodName   = the method being tested (GetByTicker, UpdatePrice, Register)
-    ExpectedResult = what the outcome should be (ReturnsNull, ReturnsFalse, ReturnsSuccess)
-    WhenCondition = the scenario being tested (WhenTickerNotFound, WhenUserExists)
-    examples:
-        GetByTicker_ReturnsNull_WhenTickerNotFound
-        UpdatePrice_ReturnsFalse_WhenTickerNotFound
-        Register_ReturnsInvalid_WhenUsernameIsTaken
-    Java/JUnit equivalent: shouldReturnNullWhenTickerNotFound (camelCase, no underscores)
-    why the difference: .NET community adopted PascalCase + underscores so test names
-        read naturally in test runner output — the underscores create visual separation
-        that makes scanning a test list easier than unbroken camelCase
+- AddHttpClient<IInterface, Implementation>()
+    used when a service needs to make outbound HTTP calls (Alpha Vantage, external APIs)
+    registers both the interface → implementation mapping AND a properly managed HttpClient
+    using AddScoped instead would create a raw HttpClient without ASP.NET's connection pool
+        raw clients opened and closed manually can exhaust sockets under load
+    the HttpClient is injected directly into the service constructor by the DI container
+
+- User.FindFirstValue(ClaimTypes.NameIdentifier)
+    reads a specific claim from the JWT that the auth middleware already verified
+    used in controllers to get the logged-in user's ID without making a DB call
+    the JWT was signed on login — if middleware validated the signature, claims are trusted
+    ClaimTypes.NameIdentifier = the userId baked into the token during GenerateToken
+    always returns string — use int.TryParse before using as an int
+
+- IConfiguration
+    injected into services that need to read from appsettings.json
+    colon-separated path notation: config["AlphaVantage:ApiKey"] reads nested JSON keys
+    the ! null-forgiving operator suppresses the compiler warning but does NOT prevent null at runtime
+        if the key is missing from appsettings.json the server starts but crashes on first request
+        lesson: every key referenced in code must exist in appsettings.json
 
 ─────────────────────────────────────────────────────────────────────────────────────
 
@@ -45,3 +58,158 @@ EF Core:
     usage: s.SetProperty(x => x.LastPrice, price).SetProperty(x => x.PriceFetchedAt, DateTime.UtcNow)
     lambda x => x.LastPrice tells EF Core which property/column to target
     the second argument is the new value
+
+─────────────────────────────────────────────────────────────────────────────────────
+
+xUnit:
+
+- xUnit test naming convention → MethodName_ExpectedResult_WhenCondition
+    three parts separated by underscores
+    MethodName   = the method being tested (GetByTicker, UpdatePrice, Register)
+    ExpectedResult = what the outcome should be (ReturnsNull, ReturnsFalse, ReturnsSuccess)
+    WhenCondition = the scenario being tested (WhenTickerNotFound, WhenUserExists)
+    examples:
+        GetByTicker_ReturnsNull_WhenTickerNotFound
+        UpdatePrice_ReturnsFalse_WhenTickerNotFound
+        Register_ReturnsInvalid_WhenUsernameIsTaken
+    Java/JUnit equivalent: shouldReturnNullWhenTickerNotFound (camelCase, no underscores)
+    why the difference: .NET community adopted PascalCase + underscores so test names
+        read naturally in test runner output — the underscores create visual separation
+        that makes scanning a test list easier than unbroken camelCase
+
+─────────────────────────────────────────────────────────────────────────────────────
+Angular:
+
+    Services (PortfolioService, SecurityService)
+
+        - @Injectable({ providedIn: 'root' })
+            same decorator from AuthService — registers this as a singleton in Angular's DI container
+            one instance shared across every component that injects it
+            for data services (portfolio, security) this means one place owns each HTTP call
+            no component constructs it with new — Angular manages the lifecycle
+
+        - private http = inject(HttpClient)
+            inject() pulls the HttpClient singleton from Angular's DI container
+            HttpClient is provided globally via provideHttpClient() in app.config.ts
+            every service uses the same underlying HttpClient — connection pooling handled automatically
+            never instantiate HttpClient with new — Angular manages it
+
+        - http.get<T>(url) returns Observable<T>, not data
+            the call does NOT fire until something subscribes
+            the service returns the Observable to the caller (component)
+            the component subscribes and receives the data when the HTTP response arrives
+            parallel to returning a Promise from a JS fetch call — but it is lazy (fetch fires immediately,
+                Observable fires only when subscribed)
+
+        - why the service owns the URL, not the component
+            if the API base URL changes, you update one file not every component
+            components describe WHAT they need, not HOW to get it
+            same separation-of-concerns principle as a Spring @Service hiding repo details from controllers
+
+    Component Lifecycle — ngOnInit
+
+        - implements OnInit
+            interface that declares the ngOnInit() method
+            Angular calls ngOnInit() once after the component is created and its inputs are set
+            the right place to trigger data fetching — not the constructor
+            constructor is for DI only (inject calls), not side effects or HTTP calls
+
+        - why not fetch in the constructor
+            Angular's DI system runs the constructor — it is not a safe place for async work
+            ngOnInit fires after Angular finishes wiring up the component — safe for subscriptions
+            same rule as useEffect in React: data fetching belongs in a lifecycle hook, not setup
+
+        - subscribe({ next, error })
+            next: callback — runs when the HTTP call succeeds, receives the response body as T
+            error: callback — runs when the HTTP call fails (non-2xx, network error, etc.)
+            setting a component property inside next (this.portfolio = data) makes Angular
+                re-render the template with the new data on the next change detection cycle
+
+    Zoneless Change Detection — ChangeDetectorRef
+
+        - why zoneless needs manual marking
+            Zone.js (traditional Angular) patches browser APIs (setTimeout, fetch, etc.) to detect
+                when async work finishes and trigger change detection automatically
+            zoneless Angular (provideZonelessChangeDetection()) removes Zone.js entirely
+                async callbacks (HTTP responses, error handlers) complete outside Angular's awareness
+                Angular does not know new data arrived → template does not update → blank screen
+
+        - ChangeDetectorRef
+            inject(ChangeDetectorRef) gives you a handle to this component's change detector
+            cdr.markForCheck() tells Angular: "this component has new state — check it on the next cycle"
+            must be called at the end of EVERY async callback: next and error
+            forgetting it in the error callback = error state set in .ts but never shown in .html
+
+        - the rule going forward
+            every component that sets state inside an HTTP subscribe callback needs:
+                private cdr = inject(ChangeDetectorRef)
+                cdr.markForCheck() as the last line of next: and error:
+            this applies to every future slice — it is not optional in a zoneless app
+
+    CommonModule and Structural Directives
+
+        - imports: [CommonModule]
+            CommonModule bundles the directives needed for conditional rendering and loops
+            without it in the component's imports array, *ngIf and *ngFor are unrecognized
+            Angular throws a compile error: "Can't bind to ngIf since it isn't a known property"
+            standalone components must declare every dependency they use — nothing is global
+
+        - *ngIf="condition"
+            renders the element (and its children) only when condition is truthy
+            removes the element from the DOM entirely when false — not just hidden
+            used here for: showing the error alert, showing data once loaded, showing loading state
+            auth.txt uses the newer @if syntax — *ngIf is the older but still valid equivalent
+            both work — *ngIf requires CommonModule, @if does not (built into Angular 17+ template engine)
+
+        - *ngFor="let s of securities"
+            renders the element once per item in the array
+            s is the loop variable — available in the template as {{ s.ticker }}, {{ s.companyName }} etc.
+            used in the trading table to render one <tr> per security
+            auth.txt equivalent: @for (item of list; track item.id) { ... }
+
+        - multiple *ngIf states for one data block
+            pattern used: loading state / error state / data state — three mutually exclusive conditions
+            *ngIf="!portfolio && !errorMessage"  → loading (neither data nor error yet)
+            *ngIf="errorMessage"                  → something went wrong
+            *ngIf="portfolio"                     → data arrived, show it
+            ensures the user always sees exactly one appropriate state, never a blank page
+
+    Template Pipes
+
+        - {{ value | number:'1.2-2' }}
+            pipe transforms a value for display without changing the underlying data
+            number:'1.2-2' = minimum 1 digit before decimal, minimum 2 and maximum 2 after
+            20000 → "20,000.00"  /  298.87 → "298.87"
+            the pipe is Angular's built-in DecimalPipe — imported via CommonModule
+            the underlying property (portfolio.cashBalance) stays a raw number in TypeScript
+
+        - $ prefix in template currency display
+            write literal $ directly in the HTML before the {{ }} interpolation
+            {{ s.lastPrice | number:'1.2-2' }} → just the number
+            ${{ s.lastPrice | number:'1.2-2' }} → $298.87
+            do NOT write \$ — the backslash is a markdown escape and renders literally in the browser
+
+        - *ngIf for null price vs present price
+            lastPrice is number | null — some securities may not have a price yet (API rate limit)
+            two sibling spans handle both cases:
+                <span *ngIf="s.lastPrice !== null">${{ s.lastPrice | number:'1.2-2' }}</span>
+                <span *ngIf="s.lastPrice === null" class="text-muted">—</span>
+            Angular evaluates both conditions — exactly one renders depending on data state
+
+    Routing — Adding a New Route
+
+        - adding a route under MainLayout children
+            MainLayout is the authenticated shell — all protected pages are children of it
+            adding { path: 'trading', component: TradingComponent } to its children array:
+                automatically inherits the authGuard from the parent MainLayout route
+                renders TradingComponent inside MainLayout's <router-outlet> when path matches
+            no need to add canActivate to each child — guard on parent covers all children
+
+        - import required before adding to routes array
+            import { TradingComponent } from './trading/trading'
+            Angular's router uses the class reference — not a string name
+            missing the import = the routes array can't reference the class → compile error
+
+        - sidebar link must match route path exactly
+            [routerLink]="'/trading'" in the sidebar must match path: 'trading' in routes
+            a mismatch navigates to the wrong route or throws a router warning silently

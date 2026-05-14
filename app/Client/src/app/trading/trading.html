@@ -1,0 +1,29 @@
+<div class="container py-4">
+  <h2 class="mb-4">Trading</h2>
+
+  <div *ngIf="errorMessage" class="alert alert-danger">{{ errorMessage }}</div>
+
+  <table *ngIf="securities.length > 0" class="table table-hover">
+    <thead>
+      <tr>
+        <th>Ticker</th>
+        <th>Company</th>
+        <th>Asset Class</th>
+        <th>Last Price</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr *ngFor="let s of securities">
+        <td><strong>{{ s.ticker }}</strong></td>
+        <td>{{ s.companyName }}</td>
+        <td>{{ s.assetClass }}</td>
+        <td>
+          <span *ngIf="s.lastPrice !== null">${{ s.lastPrice | number:'1.2-2' }}</span>
+          <span *ngIf="s.lastPrice === null" class="text-muted">—</span>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div *ngIf="securities.length === 0 && !errorMessage" class="text-muted">Loading...</div>
+</div>
