@@ -1,0 +1,24 @@
+<div class="d-flex flex-column bg-dark text-white" style="width: 240px; min-height: 100vh;">
+
+    <div class="p-3 border-bottom border-secondary">
+        <span class="fs-5 fw-bold">WealthView</span>
+    </div>
+
+    <nav class="flex-grow-1 p-2 d-flex flex-column gap-1">
+        <a routerLink="/dashboard"    routerLinkActive="active" class="sidebar-link">Dashboard</a>
+        <a routerLink="/bank-accounts" routerLinkActive="active" class="sidebar-link">Bank Accounts</a>
+        <a routerLink="/transfers"    routerLinkActive="active" class="sidebar-link">Transfers</a>
+        <a routerLink="/trading"      routerLinkActive="active" class="sidebar-link">Trading</a>
+        <a routerLink="/holdings"     routerLinkActive="active" class="sidebar-link">Holdings</a>
+        <a routerLink="/trade-log"    routerLinkActive="active" class="sidebar-link">Trade Log</a>
+    </nav>
+
+    <div class="p-3 border-top border-secondary">
+        @if (user) {
+            <div class="small text-white-50 mb-1">{{ user.firstName }} {{ user.lastName }}</div>
+            <div class="small text-white-50 mb-2">&#64;{{ user.username }}</div>
+        }
+        <button (click)="logout()" class="btn btn-outline-light btn-sm w-100">Logout</button>
+    </div>
+
+</div>

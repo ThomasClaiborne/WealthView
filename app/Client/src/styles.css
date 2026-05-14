@@ -1,1 +1,12 @@
 /* You can add global styles to this file, and also import other style files */
+.sidebar-link {
+    display: block;
+    padding: 8px 12px;
+    border-radius: 6px;
+    color: rgba(255,255,255,.75);
+    text-decoration: none;
+}
+.sidebar-link:hover, .sidebar-link.active {
+    background: rgba(255,255,255,.12);
+    color: #fff;
+}

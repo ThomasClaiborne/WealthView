@@ -1,3 +1,30 @@
 import { Routes } from '@angular/router';
+import { authGuard }       from './core/auth.guard';
+import { publicOnlyGuard } from './core/public-only.guard';
+import { AuthLayout }  from './layout/auth-layout';
+import { MainLayout }  from './layout/main-layout';
+import { Landing }     from './auth/landing';
+import { Login }       from './auth/login';
+import { Register }    from './auth/register';
+import { Dashboard }   from './dashboard/dashboard';
 
-export const routes: Routes = [];
+export const routes: Routes = [
+    {
+        path: '',
+        component: AuthLayout,
+        children: [
+            { path: '',         component: Landing,  canActivate: [publicOnlyGuard] },
+            { path: 'login',    component: Login,    canActivate: [publicOnlyGuard] },
+            { path: 'register', component: Register, canActivate: [publicOnlyGuard] }
+        ]
+    },
+    {
+        path: '',
+        component: MainLayout,
+        canActivate: [authGuard],
+        children: [
+            { path: 'dashboard', component: Dashboard }
+        ]
+    },
+    { path: '**', redirectTo: '' }
+];

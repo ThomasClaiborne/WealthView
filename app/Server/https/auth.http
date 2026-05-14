@@ -1,0 +1,103 @@
+@baseUrl = http://localhost:5266
+
+### ── Register ───────────────────────────────────────────────────────
+
+### Register — valid → expect 201 + token
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{
+  "firstName": "Thomas",
+  "lastName": "Claiborne",
+  "username": "tclaiborne",
+  "email": "thomas@wealthview.com",
+  "password": "Password1!"
+}
+
+###
+
+### Register — duplicate username → expect 400
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{
+  "firstName": "Someone",
+  "lastName": "Else",
+  "username": "tclaiborne",
+  "email": "other@wealthview.com",
+  "password": "Password1!"
+}
+
+###
+
+### Register — duplicate email → expect 400
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{
+  "firstName": "Someone",
+  "lastName": "Else",
+  "username": "someoneelse",
+  "email": "thomas@wealthview.com",
+  "password": "Password1!"
+}
+
+###
+
+### Register — DTO validation failure (short username, bad email, short password) → expect 400
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{
+  "firstName": "",
+  "lastName": "",
+  "username": "ab",
+  "email": "notanemail",
+  "password": "short"
+}
+
+###
+
+### ── Login ────────────────────────────────────────────────────────────
+
+### Login — by username → expect 200 + token
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "credential": "tclaiborne",
+  "password": "Password1!"
+}
+
+###
+
+### Login — by email → expect 200 + token
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "credential": "thomas@wealthview.com",
+  "password": "Password1!"
+}
+
+###
+
+### Login — wrong password → expect 401
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "credential": "tclaiborne",
+  "password": "WrongPassword!"
+}
+
+###
+
+### Login — nonexistent user → expect 401
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "credential": "nobody",
+  "password": "Password1!"
+}
