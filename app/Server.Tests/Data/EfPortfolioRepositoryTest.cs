@@ -4,7 +4,7 @@ using Server.Models;
 
 namespace Server.Tests;
 
-[Collection("DatabaseTests")]   
+[Collection("DatabaseTests")]
 public class EfPortfolioRepositoryTest : IAsyncLifetime
 {
     private AppDbContext _db = null!;
@@ -50,5 +50,26 @@ public class EfPortfolioRepositoryTest : IAsyncLifetime
         Assert.True(result.PortfolioId > 0);
         Assert.Equal(newUser.AppUserId, result.AppUserId);
         Assert.Equal(0, result.CashBalance);
+    }
+
+    // ── GetByUserId ───────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetByUserId_ReturnsPortfolio_WhenUserExists()
+    {
+        // KnownGoodState seeds portfolio for userId = 1 (jdoe) with cash_balance = 850
+        var result = await _repo.GetByUserId(1);
+
+        Assert.NotNull(result);
+        Assert.Equal(1, result.AppUserId);
+        Assert.Equal(850.00m, result.CashBalance);
+    }
+
+    [Fact]
+    public async Task GetByUserId_ReturnsNull_WhenUserHasNoPortfolio()
+    {
+        var result = await _repo.GetByUserId(999);
+
+        Assert.Null(result);
     }
 }
