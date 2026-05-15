@@ -1,5 +1,6 @@
 namespace Server.Tests.Domain;
 
+using System.Reflection;
 using Moq;
 using Server.Data;
 using Server.Domain;
@@ -31,6 +32,7 @@ public class TradeServiceTest
         var result = await _service.Buy(1, new BuyRequest { Ticker = "FAKE", Quantity = 1 });
 
         Assert.Equal(ResultType.NotFound, result.Type);
+        Assert.Contains("Ticker not found", result.Messages[0]);
     }
 
     [Fact]
@@ -42,6 +44,7 @@ public class TradeServiceTest
         var result = await _service.Buy(1, new BuyRequest { Ticker = "AAPL", Quantity = 1 });
 
         Assert.Equal(ResultType.Invalid, result.Type);
+        Assert.Contains("Price not yet available", result.Messages[0]);
     }
 
     [Fact]
@@ -55,6 +58,7 @@ public class TradeServiceTest
         var result = await _service.Buy(1, new BuyRequest { Ticker = "AAPL", Quantity = 10 });
 
         Assert.Equal(ResultType.Invalid, result.Type);
+        Assert.Contains("Insufficient cash", result.Messages[0]);
     }
 
     [Fact]

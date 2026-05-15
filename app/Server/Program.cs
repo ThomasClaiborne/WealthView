@@ -18,11 +18,15 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 builder.Services.AddScoped<IUserRepository,      EfUserRepository>();
 builder.Services.AddScoped<IPortfolioRepository, EfPortfolioRepository>();
 builder.Services.AddScoped<ISecurityRepository,  EfSecurityRepository>(); 
+builder.Services.AddScoped<IHoldingRepository, EfHoldingRepository>();
+builder.Services.AddScoped<ITradeRepository,   EfTradeRepository>();
 
 // ── Services ──────────────────────────────────────────────────────────
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IPortfolioService, PortfolioService>();
 builder.Services.AddScoped<ISecurityService, SecurityService>();
+builder.Services.AddScoped<IHoldingService, HoldingService>();
+builder.Services.AddScoped<ITradeService,   TradeService>();
 
 // ── Http ─────────────────────────────────────────────────────────────
 
