@@ -24,4 +24,20 @@ public class EfPortfolioRepository : IPortfolioRepository
         return await _db.Portfolios
             .FirstOrDefaultAsync(p => p.AppUserId == userId);
     }
+
+    public async Task<Portfolio?> GetById(int portfolioId)
+    {
+        return await _db.Portfolios
+            .FirstOrDefaultAsync(p => p.PortfolioId == portfolioId);
+    }
+
+    public async Task<bool> UpdateCashBalance(int portfolioId, decimal newBalance)
+    {
+        var portfolio = await _db.Portfolios.FindAsync(portfolioId);
+        if (portfolio == null) return false;
+
+        portfolio.CashBalance = newBalance;
+        await _db.SaveChangesAsync();
+        return true;
+    }
 }

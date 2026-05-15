@@ -6,16 +6,18 @@ namespace Server.Domain;
 public class PortfolioService : IPortfolioService
 {
     private readonly IPortfolioRepository _portfolioRepo;
+    private readonly IHoldingRepository _holdingRepo;
 
-    public PortfolioService(IPortfolioRepository portfolioRepo)
+    public PortfolioService(IPortfolioRepository portfolioRepo, IHoldingRepository holdingRepo)
     {
         _portfolioRepo = portfolioRepo;
+        _holdingRepo = holdingRepo;
     }
 
     public async Task<Result<PortfolioResponse>> GetByUserId(int userId)
     {
         var portfolio = await _portfolioRepo.GetByUserId(userId);
-        var result    = new Result<PortfolioResponse>();
+        var result = new Result<PortfolioResponse>();
 
         if (portfolio == null)
         {
@@ -23,16 +25,25 @@ public class PortfolioService : IPortfolioService
             return result;
         }
 
-        // Slice 3 will compute TotalValue and TotalUnrealizedGl from holdings + live prices
-        // For now: TotalValue = CashBalance, no holdings exist yet
+        var holdings = await _holdingRepo.GetAllByPortfolioId(portfolio.PortfolioId);
+
+        decimal totalMarketValue = holdings
+            .Where(h => h.Security.LastPrice.HasValue)
+            .Sum(h => h.Quantity * h.Security.LastPrice!.Value);
+
+        decimal totalUnrealizedGl = holdings
+            .Where(h => h.Security.LastPrice.HasValue)
+            .Sum(h => (h.Security.LastPrice!.Value - h.AvgCost) * h.Quantity);
+
         result.Payload = new PortfolioResponse
         {
-            PortfolioId      = portfolio.PortfolioId,
-            CashBalance      = portfolio.CashBalance,
-            TotalValue       = portfolio.CashBalance,
-            TotalUnrealizedGl = 0,
-            HoldingCount     = 0
+            PortfolioId = portfolio.PortfolioId,
+            CashBalance = portfolio.CashBalance,
+            TotalValue = portfolio.CashBalance + totalMarketValue,
+            TotalUnrealizedGl = totalUnrealizedGl,
+            HoldingCount = holdings.Count
         };
+
         return result;
     }
 }
