@@ -67,9 +67,9 @@ public class HoldingServiceTest
         var h      = result.Payload![0];
 
         Assert.Equal(ResultType.Success, result.Type);
-        Assert.Equal(2000m,  h.MarketValue);      // 10 × 200
-        Assert.Equal(500m,   h.UnrealizedGl);     // (200 - 150) × 10
-        Assert.Equal(33.33m, Math.Round(h.UnrealizedGlPct, 2)); // 500/1500 × 100
+        Assert.Equal(2000m,  h.MarketValue);      
+        Assert.Equal(500m,   h.UnrealizedGl);     
+        Assert.Equal(33.33m, Math.Round(h.UnrealizedGlPct, 2)); 
     }
 
     [Fact]
