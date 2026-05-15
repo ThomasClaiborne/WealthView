@@ -47,6 +47,10 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<Holding>()
             .HasIndex(h => new { h.PortfolioId, h.Ticker })
             .IsUnique();
+        modelBuilder.Entity<Holding>()
+            .HasOne(h => h.Security)
+            .WithMany(s => s.Holdings)
+            .HasForeignKey(h => h.Ticker);
 
         // ── Trade ─────────────────────────────────────────────────
         modelBuilder.Entity<Trade>().ToTable("trade");
