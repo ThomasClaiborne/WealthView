@@ -1,8 +1,34 @@
 <div class="container py-4">
-  <h2 class="mb-4">Trading</h2>
+  <h2 class="mb-3">Trading</h2>
+
+  <p class="text-muted mb-4">Cash Available: <strong>${{ cashBalance | number:'1.2-2' }}</strong></p>
 
   <div *ngIf="errorMessage" class="alert alert-danger">{{ errorMessage }}</div>
+  <div *ngIf="successMessage" class="alert alert-success">{{ successMessage }}</div>
 
+  <!-- Buy Form -->
+  <div *ngIf="selectedSecurity" class="card mb-4" style="max-width: 400px;">
+    <div class="card-body">
+      <h5 class="card-title">Buy {{ selectedSecurity.ticker }}</h5>
+      <p class="text-muted mb-1">{{ selectedSecurity.companyName }}</p>
+      <p class="mb-3">Price: <strong>${{ selectedSecurity.lastPrice | number:'1.2-2' }}</strong></p>
+
+      <label class="form-label">Quantity</label>
+      <input type="number" class="form-control mb-2"
+             [(ngModel)]="buyQuantity" min="0.0001" step="1" />
+
+      <p class="text-muted mb-3">Estimated Cost: <strong>${{ estimatedCost | number:'1.2-2' }}</strong></p>
+
+      <div class="d-flex gap-2">
+        <button class="btn btn-primary" [disabled]="loading" (click)="confirmBuy()">
+          {{ loading ? 'Processing...' : 'Confirm Buy' }}
+        </button>
+        <button class="btn btn-outline-secondary" (click)="selectedTicker = null">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Securities Table -->
   <table *ngIf="securities.length > 0" class="table table-hover">
     <thead>
       <tr>
@@ -10,6 +36,7 @@
         <th>Company</th>
         <th>Asset Class</th>
         <th>Last Price</th>
+        <th></th>
       </tr>
     </thead>
     <tbody>
@@ -20,6 +47,13 @@
         <td>
           <span *ngIf="s.lastPrice !== null">${{ s.lastPrice | number:'1.2-2' }}</span>
           <span *ngIf="s.lastPrice === null" class="text-muted">—</span>
+        </td>
+        <td>
+          <button class="btn btn-sm btn-outline-primary"
+                  [disabled]="!s.lastPrice"
+                  (click)="selectSecurity(s.ticker)">
+            Buy
+          </button>
         </td>
       </tr>
     </tbody>
