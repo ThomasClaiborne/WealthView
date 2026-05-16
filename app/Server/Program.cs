@@ -20,6 +20,8 @@ builder.Services.AddScoped<IPortfolioRepository, EfPortfolioRepository>();
 builder.Services.AddScoped<ISecurityRepository,  EfSecurityRepository>(); 
 builder.Services.AddScoped<IHoldingRepository, EfHoldingRepository>();
 builder.Services.AddScoped<ITradeRepository,   EfTradeRepository>();
+builder.Services.AddScoped<IBankAccountRepository,  EfBankAccountRepository>();
+builder.Services.AddScoped<IFundTransferRepository, EfFundTransferRepository>();
 
 // ── Services ──────────────────────────────────────────────────────────
 builder.Services.AddScoped<IAuthService, AuthService>();
@@ -27,6 +29,8 @@ builder.Services.AddScoped<IPortfolioService, PortfolioService>();
 builder.Services.AddScoped<ISecurityService, SecurityService>();
 builder.Services.AddScoped<IHoldingService, HoldingService>();
 builder.Services.AddScoped<ITradeService,   TradeService>();
+builder.Services.AddScoped<IBankAccountService,  BankAccountService>();
+builder.Services.AddScoped<IFundTransferService, FundTransferService>();
 
 // ── Http ─────────────────────────────────────────────────────────────
 

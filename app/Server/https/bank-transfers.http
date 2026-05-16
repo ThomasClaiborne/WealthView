@@ -1,0 +1,203 @@
+@baseUrl = http://localhost:5266
+
+### Step 1 — Login to get token (run first)
+# @name login
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "credential": "tclaiborne",
+  "password": "Password1!"
+}
+
+###
+
+### Step 2 — Get all bank accounts → expect 200 + list of active accounts
+GET {{baseUrl}}/api/bank-accounts
+Authorization: Bearer {{login.response.body.token}}
+
+###
+
+### Step 3 — Add a new bank account → expect 201
+POST {{baseUrl}}/api/bank-accounts
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "bankName": "Chase",
+  "nickname": "Main Checking",
+  "startingBalance": 5000
+}
+
+###
+
+### Step 4 — Add same bank again → expect 409 Conflict
+POST {{baseUrl}}/api/bank-accounts
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "bankName": "Chase",
+  "nickname": "Duplicate",
+  "startingBalance": 1000
+}
+
+###
+
+### Step 5 — Deposit to bank account → expect 200 + updated balance
+POST {{baseUrl}}/api/bank-accounts/5/deposit
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "amount": 5000000
+}
+
+###
+
+### Step 6 — Withdraw from bank account → expect 200 + updated balance
+POST {{baseUrl}}/api/bank-accounts/5/withdraw
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "amount": 200
+}
+
+###
+
+### Step 7 — Withdraw more than balance → expect 400
+POST {{baseUrl}}/api/bank-accounts/5/withdraw
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "amount": 9999999
+}
+
+###
+
+### Step 8 — Request deposit (bank → portfolio) → expect 201 + Pending status
+POST {{baseUrl}}/api/transfers/deposit
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "bankAccountId": 5,
+  "amount": 15000
+}
+
+###
+
+### Step 9 — Get pending transfers → expect 200 + the transfer from step 8
+GET {{baseUrl}}/api/transfers/pending
+Authorization: Bearer {{login.response.body.token}}
+
+###
+
+### Step 10 — Approve the pending deposit → expect 200 + Approved status
+### Replace {id} with the fundTransferId from step 8 response
+POST {{baseUrl}}/api/transfers/5/approve
+Authorization: Bearer {{login.response.body.token}}
+
+###
+
+### Step 11 — Verify portfolio cash increased after approve
+GET {{baseUrl}}/api/portfolio
+Authorization: Bearer {{login.response.body.token}}
+
+###
+
+### Step 12 — Verify bank account balance decreased after approve
+GET {{baseUrl}}/api/bank-accounts
+Authorization: Bearer {{login.response.body.token}}
+
+###
+
+### Step 13 — Request withdrawal (portfolio → bank) → expect 201 + Pending
+POST {{baseUrl}}/api/transfers/withdrawal
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "bankAccountId": 5,
+  "amount": 5000
+}
+
+###
+
+### Step 14 — Reject the pending withdrawal → expect 200 + Rejected status
+### Replace {id} with the fundTransferId from step 13 response
+POST {{baseUrl}}/api/transfers/6/reject
+Authorization: Bearer {{login.response.body.token}}
+
+###
+
+### Step 15 — Verify no balance changes after reject
+GET {{baseUrl}}/api/portfolio
+Authorization: Bearer {{login.response.body.token}}
+
+###
+
+### Step 16 — Get transfer history → expect resolved transfers only
+GET {{baseUrl}}/api/transfers/history
+Authorization: Bearer {{login.response.body.token}}
+
+###
+
+### Step 17 — Request deposit more than bank balance → expect 400
+POST {{baseUrl}}/api/transfers/deposit
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "bankAccountId": 1,
+  "amount": 9999999
+}
+
+###
+
+### Step 18 — Request withdrawal more than portfolio cash → expect 400
+POST {{baseUrl}}/api/transfers/withdrawal
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "bankAccountId": 1,
+  "amount": 9999999
+}
+
+###
+
+### Step 19 — Deactivate a bank account → expect 204
+DELETE {{baseUrl}}/api/bank-accounts/5
+Authorization: Bearer {{login.response.body.token}}
+
+###
+
+### Step 20 — Verify deactivated account no longer appears → expect 200 + shorter list
+GET {{baseUrl}}/api/bank-accounts
+Authorization: Bearer {{login.response.body.token}}
+
+###
+
+### Step 21 — Re-add the same bank → expect 201 (reactivation path)
+POST {{baseUrl}}/api/bank-accounts
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "bankName": "Chase",
+  "nickname": "Reactivated",
+  "startingBalance": 2000
+}
+
+###
+
+### Step 22 — Hit bank accounts without token → expect 401
+GET {{baseUrl}}/api/bank-accounts
+
+###
+
+### Step 23 — Hit transfers without token → expect 401
+GET {{baseUrl}}/api/transfers/pending
