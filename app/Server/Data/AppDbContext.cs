@@ -12,6 +12,8 @@ public class AppDbContext : DbContext
     public DbSet<Security> Securities { get; set; }
     public DbSet<Holding> Holdings { get; set; }
     public DbSet<Trade> Trades { get; set; }
+    public DbSet<BankAccount> BankAccounts { get; set; }
+    public DbSet<FundTransfer> FundTransfers { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -61,6 +63,26 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<Trade>().Property(t => t.PricePerShare)
             .HasColumnType("decimal(18,4)");
         modelBuilder.Entity<Trade>().Property(t => t.TotalValue)
+            .HasColumnType("decimal(18,4)");
+
+        // ── Bank Account ───────────────────────────────────────────────
+
+        modelBuilder.Entity<BankAccount>().ToTable("bank_account");
+        modelBuilder.Entity<BankAccount>().Property(b => b.BankName)
+            .HasConversion<string>();
+        modelBuilder.Entity<BankAccount>().Property(b => b.Balance)
+            .HasColumnType("decimal(18,4)");
+        modelBuilder.Entity<BankAccount>()
+            .HasIndex(b => new { b.AppUserId, b.BankName })
+            .IsUnique();
+
+        // ── Fund Transfer ───────────────────────────────────────────────
+        modelBuilder.Entity<FundTransfer>().ToTable("fund_transfer");
+        modelBuilder.Entity<FundTransfer>().Property(f => f.Direction)
+            .HasConversion<string>();
+        modelBuilder.Entity<FundTransfer>().Property(f => f.Status)
+            .HasConversion<string>();
+        modelBuilder.Entity<FundTransfer>().Property(f => f.Amount)
             .HasColumnType("decimal(18,4)");
     }
 }
