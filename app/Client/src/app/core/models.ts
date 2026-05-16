@@ -64,3 +64,26 @@ export interface TradeResponse {
     executedAt:     string;
     newCashBalance: number;
 }
+
+export interface BankAccountResponse {
+    bankAccountId:   number;
+    bankName:        string;  
+    nickname:        string | null;
+    balance:         number;
+    isActive:        boolean;
+    lastActivatedAt: string;
+    createdAt:       string;
+}
+
+export interface FundTransferResponse {
+    fundTransferId: number;
+    portfolioId:    number;
+    bankAccountId:  number;
+    bankName:       string;
+    bankNickname:   string | null;
+    direction:      string;  
+    amount:         number;
+    status:         string; 
+    createdAt:      string;
+    resolvedAt:     string | null;
+}
