@@ -1,0 +1,238 @@
+
+C# / ASP.NET Core:
+
+- Append-only repository (ITradeRepository)
+    ITradeRepository intentionally has no Update or Delete methods
+    the interface itself enforces the business rule — if a method doesn't exist, it can't be called
+    trade records are a permanent financial audit log — deleting or editing them would violate integrity
+    even if business logic tried to delete a trade, it would fail at compile time, not runtime
+    contrast with IHoldingRepository which has full CRUD — holdings are mutable current state
+    Java equivalent: designing an interface with only the methods a caller is allowed to use
+
+- Atomic transactions without BeginTransactionAsync
+    Buy and Sell each make multiple sequential repo calls that must all succeed together:
+        Buy:  UpdateCashBalance → Create or Update holding → Create trade record
+        Sell: UpdateCashBalance → Delete or Update holding → Create trade record
+    these are NOT wrapped in BeginTransactionAsync — each repo call calls SaveChangesAsync
+    this is a known tradeoff: a crash between calls could leave inconsistent state
+    production-grade fix: inject AppDbContext directly into TradeService and wrap in one transaction
+    for this app the risk is acceptable — the pattern is correct, the wrapping is deferred
+    rule: whenever multiple writes must succeed together or not at all → they belong in one transaction
+    Java equivalent: @Transactional on the service method wrapping all repo calls
+
+- Fetch-modify-save pattern (UpdateCashBalance, EfHoldingRepository.Update)
+    load the entity from DB → modify properties in memory → SaveChangesAsync writes the change
+    EF Core's change tracker detects which properties changed and generates a targeted UPDATE
+    used instead of ExecuteUpdateAsync because:
+        EF Core's change tracker works on any provider including InMemory
+        ExecuteUpdateAsync generates raw SQL — not supported by InMemory test provider
+        fetch-modify-save keeps service tests mockable and repo tests runnable on both providers
+    tradeoff: one extra SELECT before every UPDATE — acceptable for this scale
+
+- Computed fields on response DTOs (never stored)
+    HoldingResponse carries fields that are calculated in the service layer, not stored in the DB:
+        MarketValue     = quantity × security.LastPrice
+        UnrealizedGl    = marketValue − (quantity × avgCost)
+        UnrealizedGlPct = (unrealizedGl / (quantity × avgCost)) × 100
+        PortfolioWeight = (marketValue / totalPortfolioValue) × 100
+    the holding table only stores what changes on a trade: quantity and avg_cost
+    everything else is derived at query time from those two values plus the live price
+    storing computed values would create derived data that can go stale and drift from truth
+    the response DTO is the only place these exist — they live in memory for the duration of one request
+
+- Weighted average cost formula
+    when buying more shares of a ticker you already own, avg_cost must be recalculated
+    formula: newAvgCost = (existingQty × existingAvgCost + newQty × price) / (existingQty + newQty)
+    example: own 10 shares @ $150, buy 10 more @ $200
+        (10 × 150 + 10 × 200) / 20 = (1500 + 2000) / 20 = $175
+    avg_cost does NOT change on a sell — only on a buy
+    selling reduces quantity but the cost basis of remaining shares is unchanged
+    this is standard FIFO/average cost accounting — required for accurate unrealized G/L
+
+- Holding lifecycle
+    a holding row is created on first buy of a ticker
+    subsequent buys of the same ticker update quantity and recalculate avg_cost in place
+    a partial sell reduces quantity — the row stays, avg_cost unchanged
+    a full sell (sellQty == holding.Quantity) deletes the row entirely
+    the holding table always reflects current ownership — it is a snapshot, not a history
+    trade table is the history — every buy and sell appended forever regardless of holding state
+    trade.Ticker is stored as plain string with no FK to holding
+        holdings can be deleted when fully sold — trade records must survive that deletion
+        a FK to holding would orphan trade records on full sell → intentionally avoided
+
+- PortfolioResponse now aggregates holdings
+    TotalValue = cashBalance + sum(quantity × lastPrice) across all holdings
+    TotalUnrealizedGl = sum((lastPrice − avgCost) × quantity) across all holdings
+    HoldingCount = holdings.Count
+    PortfolioService.GetByUserId now depends on IHoldingRepository in addition to IPortfolioRepository
+    this required adding IHoldingRepository to PortfolioService constructor and registering it in Program.cs
+    forgetting to register → AggregateException on startup: "Unable to resolve service for type IHoldingRepository"
+
+- Navigation property explicit FK mapping (HasOne / WithMany / HasForeignKey)
+    Holding has a Security navigation property — EF Core needs to know the FK column
+    Security uses Ticker (string) as its PK — EF Core convention expects a shadow column SecurityTicker
+    without explicit config EF Core generates queries referencing h.security_ticker → column not found
+    fix in OnModelCreating:
+        modelBuilder.Entity<Holding>()
+            .HasOne(h => h.Security)
+            .WithMany(s => s.Holdings)
+            .HasForeignKey(h => h.Ticker);
+    this tells EF Core: the FK is already the Ticker property — do not invent a shadow column
+    Portfolio navigation did not need this — PortfolioId is a standard int FK that EF Core resolves by convention
+    rule: any navigation where the FK column name deviates from EF Core's convention needs explicit HasForeignKey
+
+- Navigation properties exist for the relationship graph, not just for .Include()
+    Security.Holdings = List<Holding> was added to Security.cs in Slice 3 even though no query uses it
+    EF Core requires both sides of a relationship to be declared when using fluent API (WithMany)
+    the property is a relationship declaration — not a promise that it will be loaded
+    you only load it if you call .Include(s => s.Holdings) explicitly
+    removing it would break the OnModelCreating fluent config that references it
+
+─────────────────────────────────────────────────────────────────────────────────────
+
+EF Core:
+
+- .Include() on GetAllByPortfolioId
+    _db.Holdings.Include(h => h.Security) joins the security table when loading holdings
+    without Include: h.Security is null at runtime — computed fields crash immediately
+    with Include: EF Core generates a LEFT JOIN and populates h.Security automatically
+    Java equivalent: writing the JOIN in your SQL query + mapping the result with a RowMapper
+    only include what you need — each Include is an additional JOIN and adds query cost
+    GetByPortfolioAndTicker does NOT use AsNoTracking because the service modifies and saves the result
+
+- .HasIndex() with .IsUnique() in OnModelCreating
+    modelBuilder.Entity<Holding>().HasIndex(h => new { h.PortfolioId, h.Ticker }).IsUnique()
+    tells EF Core about the composite unique constraint that already exists in the schema
+    without this: EF Core doesn't know the constraint exists — won't raise a meaningful error on duplicate
+    the DB still enforces it but EF Core gets a raw MySQL exception instead of a typed constraint violation
+    composite index = the combination of both columns must be unique, not each individually
+    meaning: same portfolio can hold AAPL once, same ticker can appear in multiple portfolios
+
+─────────────────────────────────────────────────────────────────────────────────────
+
+Testing (xUnit + Moq):
+
+- set_known_good_state must reset in FK-correct order
+    DELETE trade before holding, DELETE holding before portfolio, DELETE portfolio before app_user
+    FK constraints prevent deleting a parent row while child rows reference it
+    wrong order → MySqlException: foreign key constraint fails
+    same principle as schema teardown: always delete children before parents
+
+- Full Moq for service tests (no InMemory DB)
+    TradeService and HoldingService tests use Moq exclusively — no AppDbContext, no InMemory
+    reason: repos are already integration-tested against real MySQL (EfHoldingRepositoryTest etc.)
+    service tests exist to prove business logic in complete isolation from DB behavior
+    Moq.Setup().ReturnsAsync() controls exactly what the repo returns for each scenario
+    Moq.Verify() confirms the service called the right repo method with the right arguments
+    example: verify that a full sell calls Delete not Update, and a partial sell calls Update not Delete
+
+- Verify() for behavior assertions
+    Assert checks what came back — Verify checks what was called
+    both are needed for transaction-like operations where the return value alone doesn't prove correctness
+    example:
+        Assert.Equal(ResultType.Success, result.Type)    → the result is correct
+        _holdingRepo.Verify(r => r.Delete(1), Times.Once) → Delete was called exactly once
+        _holdingRepo.Verify(r => r.Update(...), Times.Never) → Update was NOT called
+    Times.Once, Times.Never, Times.Exactly(n) — control how many times a method should have been called
+    without Verify you could have the right result for the wrong reason
+
+- ReturnsAsync((T x) => x) for pass-through mocks
+    used when a repo Create or Update should return the same object it received
+    _holdingRepo.Setup(r => r.Create(It.IsAny<Holding>())).ReturnsAsync((Holding h) => h)
+    the lambda receives the argument that was passed in and returns it unchanged
+    lets you assert on what the service built before passing it to the repo
+    without this: Create returns null by default → service crashes before reaching the assertion
+
+─────────────────────────────────────────────────────────────────────────────────────
+
+Angular:
+
+    Two-way binding with [(ngModel)]
+
+        - [(ngModel)]="buyQuantity"
+            banana-in-a-box syntax — [()] means both property binding and event binding at once
+            [ngModel]="buyQuantity" → pushes component value into the input (property binding)
+            (ngModelChange)="buyQuantity = $event" → pushes input changes back to component (event binding)
+            both directions active simultaneously → component and input stay in sync automatically
+            requires FormsModule in the component's imports array — not included in CommonModule
+            without FormsModule: "Can't bind to ngModel since it isn't a known property of input"
+
+        - why not use Reactive Forms here
+            Reactive Forms (FormBuilder, FormGroup) are appropriate for complex validated forms
+                with multiple fields, cross-field validation, and submit handling (login, register)
+            ngModel is appropriate for simple single-field inputs where live preview is the goal
+            buy quantity and sell quantity are single numbers that update a computed display value
+            the validation is done server-side — the frontend only needs the current number
+
+    Computed getters (get keyword)
+
+        - get selectedSecurity(): Security | null { ... }
+            a TypeScript getter — looks like a property in the template but runs logic on access
+            {{ selectedSecurity?.lastPrice }} in the template calls the getter every change detection cycle
+            returns the Security object matching selectedTicker, or null if none selected
+            no need to manually keep selectedSecurity in sync — it derives from selectedTicker automatically
+            same concept as a Java getter method but accessed without () in the template
+
+        - get estimatedCost(): number { ... }
+            derives from buyQuantity × selectedSecurity.lastPrice
+            updates live as the user types in the quantity input
+            because [(ngModel)] updates buyQuantity on every keystroke → getter recalculates → template updates
+            no subscribe, no event handler — reactivity is automatic through the getter
+
+    Form UX patterns
+
+        - loading flag pattern
+            loading = true before the HTTP call, false in both next and error callbacks
+            [disabled]="loading" prevents double-submission while the request is in flight
+            {{ loading ? 'Processing...' : 'Confirm Buy' }} gives the user visual feedback
+            without loading flag: user can click Confirm multiple times → duplicate trades
+
+        - successMessage and errorMessage reset on each new action
+            both set to empty string at the top of confirmBuy() and confirmSell()
+            prevents a stale success message showing while a new error is happening
+            prevents a stale error showing after a successful retry
+
+        - loadHoldings() called after successful sell
+            holdings list must reflect the sell immediately without requiring a page refresh
+            a full sell removes the holding row — if the list isn't refreshed, the deleted holding still shows
+            loadHoldings() re-fires the GET /api/holdings request and replaces the array
+            the table re-renders automatically because *ngFor is bound to the holdings array
+
+    Layout — flex-based side-by-side form + table
+
+        - d-flex gap-4 align-items-start on the wrapper
+            d-flex → flex container, children flow horizontally
+            gap-4 → consistent spacing between form and table
+            align-items-start → both children anchor to the top, not stretched to equal height
+
+        - form card uses fixed width (style="width: 300px; flex-shrink: 0")
+            fixed width keeps the form from expanding when the table has lots of columns
+            flex-shrink: 0 prevents the flex container from compressing the form below 300px
+            when the form is absent (*ngIf is false), this element is removed from the DOM entirely
+            no placeholder div needed — the table expands naturally to fill the space
+
+        - table wrapper uses flex-grow-1
+            flex-grow-1 → takes all remaining horizontal space after the form claims its 300px
+            when form is absent → table gets 100% of the available width
+            when form is present → table gets (available width − 300px − gap)
+            no JavaScript, no width calculations — flexbox handles it automatically
+
+    Pipe formatting — number precision
+
+        - number:'1.0-0' for integer display
+            format: 'minIntegerDigits.minFractionDigits-maxFractionDigits'
+            '1.0-0' = at least 1 integer digit, exactly 0 decimal places
+            used for share quantities: backend stores decimal(18,4) for fractional share support
+            the DB value 4.0000 renders as 4 on screen — no decimals shown
+            the underlying TypeScript value is still a number — only the display changes
+            use '1.2-2' for currency, '1.0-0' for whole share counts, '1.4-4' if fractional shares needed
+
+    Sticky sidebar (viewport scroll fix)
+
+        - min-height: 100vh vs height: 100vh on the shell wrapper
+            min-height: 100vh → wrapper grows with content → sidebar grows and scrolls with the page
+            height: 100vh → wrapper is locked to viewport height → sidebar never moves
+            overflow: hidden on the wrapper prevents the wrapper itself from scrolling
+            overflow-auto on <main> means only the content area scrolls — sidebar is unaffected
+            this is the standard fixed-sidebar pattern for dashboard layouts
+

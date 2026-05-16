@@ -1,0 +1,36 @@
+<div class="container py-4">
+  <h2 class="mb-4">Trade Log</h2>
+
+  <div *ngIf="errorMessage" class="alert alert-danger">{{ errorMessage }}</div>
+
+  <table *ngIf="trades.length > 0" class="table table-hover">
+    <thead>
+      <tr>
+        <th>Date</th>
+        <th>Ticker</th>
+        <th>Type</th>
+        <th>Shares</th>
+        <th>Price/Share</th>
+        <th>Total Value</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr *ngFor="let t of trades">
+        <td>{{ t.executedAt | date:'short' }}</td>
+        <td><strong>{{ t.ticker }}</strong></td>
+        <td>
+          <span class="badge"
+                [class.bg-success]="t.tradeType === 'Buy'"
+                [class.bg-danger]="t.tradeType === 'Sell'">
+            {{ t.tradeType | uppercase }}
+          </span>
+        </td>
+        <td>{{ t.quantity | number:'1.0-0' }}</td>
+        <td>${{ t.pricePerShare | number:'1.2-2' }}</td>
+        <td>${{ t.totalValue | number:'1.2-2' }}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div *ngIf="trades.length === 0 && !errorMessage" class="text-muted">No trades yet.</div>
+</div>

@@ -8,15 +8,17 @@ import { Login }       from './auth/login';
 import { Register }    from './auth/register';
 import { Dashboard }   from './dashboard/dashboard';
 import { Trading }     from './trading/trading';
+import { Holdings }    from './holdings/holdings';
+import { TradeLog }    from './trade-log/trade-log';
 
 export const routes: Routes = [
     {
         path: '',
         component: AuthLayout,
         children: [
-            { path: '',         component: Landing,  canActivate: [publicOnlyGuard] },
-            { path: 'login',    component: Login,    canActivate: [publicOnlyGuard] },
-            { path: 'register', component: Register, canActivate: [publicOnlyGuard] }
+            { path: '',         component: Landing,   canActivate: [publicOnlyGuard] },
+            { path: 'login',    component: Login,     canActivate: [publicOnlyGuard] },
+            { path: 'register', component: Register,  canActivate: [publicOnlyGuard] }
         ]
     },
     {
@@ -25,7 +27,9 @@ export const routes: Routes = [
         canActivate: [authGuard],
         children: [
             { path: 'dashboard', component: Dashboard },
-            { path: 'trading', component: Trading }
+            { path: 'trading',   component: Trading   },
+            { path: 'holdings',  component: Holdings  },
+            { path: 'trade-log', component: TradeLog  }
         ]
     },
     { path: '**', redirectTo: '' }

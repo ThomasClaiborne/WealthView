@@ -7,4 +7,7 @@ public class Security
     public AssetClass AssetClass { get; set; }
     public decimal? LastPrice { get; set; }
     public DateTime? PriceFetchedAt { get; set; }
+
+    // Navigation properties
+    public List<Holding> Holdings { get; set; } = new();
 }

@@ -10,38 +10,57 @@ public class AppDbContext : DbContext
     public DbSet<AppUser> Users { get; set; }
     public DbSet<Portfolio> Portfolios { get; set; }
     public DbSet<Security> Securities { get; set; }
+    public DbSet<Holding> Holdings { get; set; }
+    public DbSet<Trade> Trades { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        // ── Table names ──────────────────────────────────────────────────
-        // EF Core pluralizes by default — override to match the schema
+        // ── App User ──────────────────────────────────────────────────
         modelBuilder.Entity<AppUser>().ToTable("app_user");
+
+        // ── Portfolio ─────────────────────────────────────────────────
         modelBuilder.Entity<Portfolio>().ToTable("portfolio");
-        modelBuilder.Entity<Security>().ToTable("security");
-
-        // Ticker is a string PK — EF Core looks for "Id" by convention so we must be explicit
-        modelBuilder.Entity<Security>().HasKey(s => s.Ticker);
-
-        // Store enum name as string to match MySQL ENUM values ('Equity', 'ETF', 'FixedIncome')
-        modelBuilder.Entity<Security>()
-            .Property(s => s.AssetClass)
-            .HasConversion<string>();
-
-        // ── Decimal precision ────────────────────────────────────────────
-        // Never store financial values as float/double
-        modelBuilder.Entity<Portfolio>()
-            .Property(p => p.CashBalance)
-            .HasColumnType("decimal(18,4)");
-
-        modelBuilder.Entity<Security>()
-            .Property(s => s.LastPrice)
-            .HasColumnType("decimal(18,4)");
-
-        // ── One-to-one: AppUser ↔ Portfolio ─────────────────────────────
-        // EF Core needs explicit config for one-to-one — won't infer it
         modelBuilder.Entity<Portfolio>()
             .HasOne(p => p.AppUser)
             .WithOne(u => u.Portfolio)
             .HasForeignKey<Portfolio>(p => p.AppUserId);
+        modelBuilder.Entity<Portfolio>()
+            .Property(p => p.CashBalance)
+            .HasColumnType("decimal(18,4)");
+
+        // ── Security ─────────────────────────────────────────────────
+        modelBuilder.Entity<Security>().ToTable("security");
+        modelBuilder.Entity<Security>().HasKey(s => s.Ticker);
+        modelBuilder.Entity<Security>()
+            .Property(s => s.AssetClass)
+            .HasConversion<string>();
+        modelBuilder.Entity<Security>()
+            .Property(s => s.LastPrice)
+            .HasColumnType("decimal(18,4)");
+
+        // ── Holding ─────────────────────────────────────────────────
+        modelBuilder.Entity<Holding>().ToTable("holding");
+        modelBuilder.Entity<Holding>().Property(h => h.Quantity)
+            .HasColumnType("decimal(18,4)");
+        modelBuilder.Entity<Holding>().Property(h => h.AvgCost)
+            .HasColumnType("decimal(18,4)");
+        modelBuilder.Entity<Holding>()
+            .HasIndex(h => new { h.PortfolioId, h.Ticker })
+            .IsUnique();
+        modelBuilder.Entity<Holding>()
+            .HasOne(h => h.Security)
+            .WithMany(s => s.Holdings)
+            .HasForeignKey(h => h.Ticker);
+
+        // ── Trade ─────────────────────────────────────────────────
+        modelBuilder.Entity<Trade>().ToTable("trade");
+        modelBuilder.Entity<Trade>().Property(t => t.TradeType)
+            .HasConversion<string>();
+        modelBuilder.Entity<Trade>().Property(t => t.Quantity)
+            .HasColumnType("decimal(18,4)");
+        modelBuilder.Entity<Trade>().Property(t => t.PricePerShare)
+            .HasColumnType("decimal(18,4)");
+        modelBuilder.Entity<Trade>().Property(t => t.TotalValue)
+            .HasColumnType("decimal(18,4)");
     }
 }
