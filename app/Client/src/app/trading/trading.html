@@ -1,63 +1,72 @@
-<div class="container py-4">
-  <h2 class="mb-3">Trading</h2>
-
+<div class="container-fluid py-4">
+  <h2 class="mb-2">Trading</h2>
   <p class="text-muted mb-4">Cash Available: <strong>${{ cashBalance | number:'1.2-2' }}</strong></p>
 
   <div *ngIf="errorMessage" class="alert alert-danger">{{ errorMessage }}</div>
   <div *ngIf="successMessage" class="alert alert-success">{{ successMessage }}</div>
 
-  <!-- Buy Form -->
-  <div *ngIf="selectedSecurity" class="card mb-4" style="max-width: 400px;">
-    <div class="card-body">
-      <h5 class="card-title">Buy {{ selectedSecurity.ticker }}</h5>
-      <p class="text-muted mb-1">{{ selectedSecurity.companyName }}</p>
-      <p class="mb-3">Price: <strong>${{ selectedSecurity.lastPrice | number:'1.2-2' }}</strong></p>
+  <div class="d-flex gap-4 align-items-start">
 
-      <label class="form-label">Quantity</label>
-      <input type="number" class="form-control mb-2"
-             [(ngModel)]="buyQuantity" min="0.0001" step="1" />
+    <!-- Buy Form (left — only exists when a security is selected) -->
+    <div *ngIf="selectedSecurity" class="card" style="width: 300px; flex-shrink: 0;">
+      <div class="card-body">
+        <h5 class="card-title">Buy {{ selectedSecurity.ticker }}</h5>
+        <p class="text-muted mb-1">{{ selectedSecurity.companyName }}</p>
+        <p class="mb-3">Price: <strong>${{ selectedSecurity.lastPrice | number:'1.2-2' }}</strong></p>
 
-      <p class="text-muted mb-3">Estimated Cost: <strong>${{ estimatedCost | number:'1.2-2' }}</strong></p>
+        <label class="form-label">Quantity</label>
+        <input type="number" class="form-control mb-2"
+               [(ngModel)]="buyQuantity" min="1" step="1" />
 
-      <div class="d-flex gap-2">
-        <button class="btn btn-primary" [disabled]="loading" (click)="confirmBuy()">
-          {{ loading ? 'Processing...' : 'Confirm Buy' }}
-        </button>
-        <button class="btn btn-outline-secondary" (click)="selectedTicker = null">Cancel</button>
+        <p class="text-muted mb-1">
+          Total Cost: <strong>${{ estimatedCost | number:'1.2-2' }}</strong>
+        </p>
+        <p class="text-muted mb-3">
+          Cash Balance: <strong>${{ cashBalance | number:'1.2-2' }}</strong>
+        </p>
+
+        <div class="d-flex gap-2">
+          <button class="btn btn-primary" [disabled]="loading" (click)="confirmBuy()">
+            {{ loading ? 'Processing...' : 'Confirm Buy' }}
+          </button>
+          <button class="btn btn-outline-secondary" (click)="selectedTicker = null">Cancel</button>
+        </div>
       </div>
     </div>
+
+    <!-- Securities Table (right — expands to full width when no form) -->
+    <div class="flex-grow-1">
+      <table *ngIf="securities.length > 0" class="table table-hover">
+        <thead>
+          <tr>
+            <th>Ticker</th>
+            <th>Company</th>
+            <th>Asset Class</th>
+            <th>Last Price</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let s of securities">
+            <td><strong>{{ s.ticker }}</strong></td>
+            <td>{{ s.companyName }}</td>
+            <td>{{ s.assetClass }}</td>
+            <td>
+              <span *ngIf="s.lastPrice !== null">${{ s.lastPrice | number:'1.2-2' }}</span>
+              <span *ngIf="s.lastPrice === null" class="text-muted">—</span>
+            </td>
+            <td>
+              <button class="btn btn-sm btn-outline-primary"
+                      [disabled]="!s.lastPrice"
+                      (click)="selectSecurity(s.ticker)">
+                Buy
+              </button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <div *ngIf="securities.length === 0 && !errorMessage" class="text-muted">Loading...</div>
+    </div>
+
   </div>
-
-  <!-- Securities Table -->
-  <table *ngIf="securities.length > 0" class="table table-hover">
-    <thead>
-      <tr>
-        <th>Ticker</th>
-        <th>Company</th>
-        <th>Asset Class</th>
-        <th>Last Price</th>
-        <th></th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr *ngFor="let s of securities">
-        <td><strong>{{ s.ticker }}</strong></td>
-        <td>{{ s.companyName }}</td>
-        <td>{{ s.assetClass }}</td>
-        <td>
-          <span *ngIf="s.lastPrice !== null">${{ s.lastPrice | number:'1.2-2' }}</span>
-          <span *ngIf="s.lastPrice === null" class="text-muted">—</span>
-        </td>
-        <td>
-          <button class="btn btn-sm btn-outline-primary"
-                  [disabled]="!s.lastPrice"
-                  (click)="selectSecurity(s.ticker)">
-            Buy
-          </button>
-        </td>
-      </tr>
-    </tbody>
-  </table>
-
-  <div *ngIf="securities.length === 0 && !errorMessage" class="text-muted">Loading...</div>
 </div>

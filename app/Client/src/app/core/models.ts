@@ -22,7 +22,7 @@ export interface Trade {
     pricePerShare: number;
     totalValue:    number;
     executedAt:    string;
-}
+} 3
 export interface AuthResponse {
     token:     string;
     appUserId: number;
