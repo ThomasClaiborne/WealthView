@@ -14,6 +14,7 @@ public class AppDbContext : DbContext
     public DbSet<Trade> Trades { get; set; }
     public DbSet<BankAccount> BankAccounts { get; set; }
     public DbSet<FundTransfer> FundTransfers { get; set; }
+    public DbSet<PortfolioSnapshot> PortfolioSnapshots { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -84,5 +85,16 @@ public class AppDbContext : DbContext
             .HasConversion<string>();
         modelBuilder.Entity<FundTransfer>().Property(f => f.Amount)
             .HasColumnType("decimal(18,4)");
+
+        // ── Portfolio Snapshot ───────────────────────────────────────────────
+        modelBuilder.Entity<PortfolioSnapshot>().ToTable("portfolio_snapshot");
+        modelBuilder.Entity<PortfolioSnapshot>().HasKey(s => s.SnapshotId);
+        modelBuilder.Entity<PortfolioSnapshot>().Property(s => s.TotalValue)
+            .HasColumnType("decimal(18,4)");
+        modelBuilder.Entity<PortfolioSnapshot>()
+            .HasIndex(s => new { s.PortfolioId, s.SnapshotDate })
+            .IsUnique(); 
+        modelBuilder.Entity<PortfolioSnapshot>().Property(s => s.SnapshotDate)
+            .HasColumnType("date");
     }
 }

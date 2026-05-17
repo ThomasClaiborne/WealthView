@@ -40,4 +40,30 @@ public class EfPortfolioRepository : IPortfolioRepository
         await _db.SaveChangesAsync();
         return true;
     }
+
+    public async Task<List<PortfolioSnapshot>> GetSnapshotsByPortfolioId(int portfolioId, int days = 30)
+    {
+        var cutoff = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-days);
+
+        return await _db.PortfolioSnapshots
+            .AsNoTracking()
+            .Where(s => s.PortfolioId == portfolioId && s.SnapshotDate >= cutoff)
+            .OrderBy(s => s.SnapshotDate)
+            .ToListAsync();
+    }
+
+    public async Task<bool> SnapshotExistsForToday(int portfolioId)
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+        return await _db.PortfolioSnapshots
+            .AnyAsync(s => s.PortfolioId == portfolioId && s.SnapshotDate == today);
+    }
+
+    public async Task<PortfolioSnapshot> CreateSnapshot(PortfolioSnapshot snapshot)
+    {
+        _db.PortfolioSnapshots.Add(snapshot);
+        await _db.SaveChangesAsync();
+        return snapshot;
+    }
 }

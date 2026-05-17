@@ -5,4 +5,5 @@ namespace Server.Domain;
 public interface IPortfolioService
 {
     Task<Result<PortfolioResponse>> GetByUserId(int userId);
+    Task<Result<List<SnapshotResponse>>> GetSnapshotHistory(int portfolioId);
 }

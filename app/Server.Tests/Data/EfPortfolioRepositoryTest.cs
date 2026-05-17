@@ -2,7 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Server.Data;
 using Server.Models;
 
-namespace Server.Tests;
+namespace Server.Tests.Data;
 
 [Collection("DatabaseTests")]
 public class EfPortfolioRepositoryTest : IAsyncLifetime
@@ -71,5 +71,70 @@ public class EfPortfolioRepositoryTest : IAsyncLifetime
         var result = await _repo.GetByUserId(999);
 
         Assert.Null(result);
+    }
+
+    // ── GetSnapshotsByPortfolioId ─────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetSnapshotsByPortfolioId_ReturnsSnapshots_OrderedByDateAscending()
+    {
+        // known good state seeds snapshots for portfolio 1: Jan 2 and Jan 3
+        var result = await _repo.GetSnapshotsByPortfolioId(1);
+
+        Assert.Equal(3, result.Count);
+        Assert.True(result[0].SnapshotDate < result[1].SnapshotDate);
+    }
+
+    [Fact]
+    public async Task GetSnapshotsByPortfolioId_ReturnsEmpty_WhenNoSnapshots()
+    {
+        var result = await _repo.GetSnapshotsByPortfolioId(999);
+
+        Assert.Empty(result);
+    }
+
+    // ── SnapshotExistsForToday ────────────────────────────────────────────────
+
+    [Fact]
+    public async Task SnapshotExistsForToday_ReturnsFalse_WhenNoSnapshotForToday()
+    {
+        // known good state seeds snapshots for Jan 2 and Jan 3 — not today
+        var result = await _repo.SnapshotExistsForToday(1);
+
+        Assert.False(result);
+    }
+
+    [Fact]
+    public async Task SnapshotExistsForToday_ReturnsTrue_WhenSnapshotExistsForToday()
+    {
+        // insert a snapshot for today first
+        await _repo.CreateSnapshot(new PortfolioSnapshot
+        {
+            PortfolioId = 1,
+            SnapshotDate = DateOnly.FromDateTime(DateTime.UtcNow),
+            TotalValue = 9999m
+        });
+
+        var result = await _repo.SnapshotExistsForToday(1);
+
+        Assert.True(result);
+    }
+
+    // ── CreateSnapshot ────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task CreateSnapshot_ReturnsSnapshot_WithId()
+    {
+        var snapshot = new PortfolioSnapshot
+        {
+            PortfolioId = 1,
+            SnapshotDate = DateOnly.FromDateTime(DateTime.UtcNow),
+            TotalValue = 5000m
+        };
+
+        var result = await _repo.CreateSnapshot(snapshot);
+
+        Assert.True(result.SnapshotId > 0);
+        Assert.Equal(5000m, result.TotalValue);
     }
 }

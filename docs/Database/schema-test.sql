@@ -1,5 +1,6 @@
 
-CREATE DATABASE IF NOT EXISTS wealthview_test;
+DROP DATABASE IF EXISTS wealthview_test;
+CREATE DATABASE wealthview_test;
 USE wealthview_test;
 
 CREATE TABLE app_user (
@@ -179,9 +180,10 @@ BEGIN
     (2, 2, 2, 'Deposit',    5000.0000, 'Approved', '2026-01-01 10:00:00', '2026-01-01 10:01:00'),
     (3, 2, 3, 'Withdrawal', 1000.0000, 'Pending',  '2026-01-05 09:00:00', NULL);
 
-    INSERT INTO portfolio_snapshot (snapshot_id, portfolio_id, snapshot_date, total_value) VALUES
-    (1, 1, '2026-01-02', 2500.0000),
-    (2, 1, '2026-01-03', 2650.0000),
+    INSERT INTO portfolio_snapshot (snapshot_id, portfolio_id, snapshot_date, total_value) values
+    (5, 1, '2026-05-04', 2500.0000),
+    (1, 1, '2026-05-02', 2500.0000),
+    (2, 1, '2026-05-03', 2650.0000),
     (3, 2, '2026-01-02', 5000.0000),
     (4, 2, '2026-01-03', 5300.0000);
 END$$
