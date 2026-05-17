@@ -1,0 +1,40 @@
+@baseUrl = http://localhost:5266
+
+### Step 1 — Login
+# @name login
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "credential": "tclaiborne",
+  "password": "Password1!"
+}
+
+###
+
+### Step 2 — GET portfolio → triggers snapshot creation for today
+GET {{baseUrl}}/api/portfolio
+Authorization: Bearer {{login.response.body.token}}
+
+###
+
+### Step 3 — GET snapshot history → should include today's snapshot
+GET {{baseUrl}}/api/portfolio/snapshots
+Authorization: Bearer {{login.response.body.token}}
+
+###
+
+### Step 4 — GET portfolio again → snapshot already exists, no duplicate created
+GET {{baseUrl}}/api/portfolio
+Authorization: Bearer {{login.response.body.token}}
+
+###
+
+### Step 5 — GET snapshots again → count should be same as step 3 (idempotent)
+GET {{baseUrl}}/api/portfolio/snapshots
+Authorization: Bearer {{login.response.body.token}}
+
+###
+
+### Step 6 — Hit snapshots without token → expect 401
+GET {{baseUrl}}/api/portfolio/snapshots
