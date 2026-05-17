@@ -87,3 +87,9 @@ export interface FundTransferResponse {
     createdAt:      string;
     resolvedAt:     string | null;
 }
+
+export interface SnapshotResponse {
+    snapshotId:   number;
+    snapshotDate: string;  
+    totalValue:   number;
+}
