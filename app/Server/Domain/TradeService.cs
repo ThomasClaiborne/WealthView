@@ -60,7 +60,8 @@ public class TradeService : ITradeService
 
         var now = DateTime.UtcNow;
 
-        await _portfolioRepo.UpdateCashBalance(portfolioId, portfolio.CashBalance - totalCost);
+        decimal newCashBalance = portfolio.CashBalance - totalCost;
+        await _portfolioRepo.UpdateCashBalance(portfolioId, newCashBalance);
 
         var existing = await _holdingRepo.GetByPortfolioAndTicker(portfolioId, request.Ticker);
         if (existing is null)
@@ -97,7 +98,7 @@ public class TradeService : ITradeService
             ExecutedAt    = now
         });
 
-        result.Payload = ToResponse(trade, portfolio.CashBalance - totalCost);
+        result.Payload = ToResponse(trade, newCashBalance);
         return result;
     }
 
@@ -137,7 +138,8 @@ public class TradeService : ITradeService
         var portfolio = await _portfolioRepo.GetById(portfolioId);
         var now       = DateTime.UtcNow;
 
-        await _portfolioRepo.UpdateCashBalance(portfolioId, portfolio!.CashBalance + proceeds);
+        decimal newCashBalance = portfolio!.CashBalance + proceeds;
+        await _portfolioRepo.UpdateCashBalance(portfolioId, newCashBalance);
 
         if (holding.Quantity == request.Quantity)
         {
@@ -161,7 +163,7 @@ public class TradeService : ITradeService
             ExecutedAt    = now
         });
 
-        result.Payload = ToResponse(trade, portfolio.CashBalance + proceeds);
+        result.Payload = ToResponse(trade, newCashBalance);
         return result;
     }
 
