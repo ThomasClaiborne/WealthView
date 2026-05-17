@@ -88,6 +88,7 @@ public class AppDbContext : DbContext
 
         // ── Portfolio Snapshot ───────────────────────────────────────────────
         modelBuilder.Entity<PortfolioSnapshot>().ToTable("portfolio_snapshot");
+        modelBuilder.Entity<PortfolioSnapshot>().HasKey(s => s.SnapshotId);
         modelBuilder.Entity<PortfolioSnapshot>().Property(s => s.TotalValue)
             .HasColumnType("decimal(18,4)");
         modelBuilder.Entity<PortfolioSnapshot>()
