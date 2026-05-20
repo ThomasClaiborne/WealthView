@@ -2,10 +2,12 @@ import {
     Component,
     inject,
     OnInit,
+    OnDestroy,
     ChangeDetectorRef,
     ElementRef,
     ViewChild,
 } from '@angular/core';
+import { Subscription } from 'rxjs';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { Chart, registerables } from 'chart.js';
@@ -14,6 +16,7 @@ import { BankAccountService } from '../core/bank-account.service';
 import { FundTransferService } from '../core/fund-transfer.service';
 import { TradeService } from '../core/trade.service';
 import { HoldingService } from '../core/holding.service';
+import { ThemeService } from '../core/theme.service';
 import {
     PortfolioResponse,
     BankAccountResponse,
@@ -31,12 +34,13 @@ Chart.register(...registerables);
     imports: [CommonModule, RouterLink],
     templateUrl: './dashboard.html',
 })
-export class Dashboard implements OnInit {
+export class Dashboard implements OnInit, OnDestroy {
     private portfolioService   = inject(PortfolioService);
     private bankAccountService = inject(BankAccountService);
     private transferService    = inject(FundTransferService);
     private tradeService       = inject(TradeService);
     private holdingService     = inject(HoldingService);
+    private themeService       = inject(ThemeService);
     private cdr                = inject(ChangeDetectorRef);
 
     @ViewChild('performanceCanvas') performanceCanvas?: ElementRef<HTMLCanvasElement>;
@@ -53,8 +57,17 @@ export class Dashboard implements OnInit {
 
     private performanceChart: Chart | null = null;
     private allocationChart:  Chart | null = null;
+    private themeSub!: Subscription;
+
+    ngOnDestroy(): void {
+        this.themeSub?.unsubscribe();
+    }
 
     ngOnInit(): void {
+        this.themeSub = this.themeService.isDark$.subscribe(() => {
+            this.tryBuildCharts();
+        });
+
         this.loadPortfolioWithRetry();
 
         this.bankAccountService.getAll().subscribe({
@@ -125,13 +138,27 @@ export class Dashboard implements OnInit {
         this.buildAllocationChart();
     }
 
+    private get isDark(): boolean {
+        return this.themeService.isDark;
+    }
+
+    private get chartColors() {
+        const dark = this.isDark;
+        return {
+            tickColor:  dark ? 'rgba(241,245,249,0.55)' : '#334155',
+            gridColor:  dark ? 'rgba(51,65,85,0.6)'     : 'rgba(226,232,240,0.8)',
+            labelColor: dark ? 'rgba(241,245,249,0.8)'  : '#334155',
+            cardBg:     dark ? '#1E293B'                 : '#FFFFFF',
+        };
+    }
+
     private buildPerformanceChart(): void {
-        if (this.performanceChart) {
-            this.performanceChart.destroy();
-        }
+        if (this.performanceChart) this.performanceChart.destroy();
 
         const ctx = this.performanceCanvas!.nativeElement.getContext('2d');
         if (!ctx) return;
+
+        const { tickColor, gridColor } = this.chartColors;
 
         this.performanceChart = new Chart(ctx, {
             type: 'line',
@@ -142,10 +169,11 @@ export class Dashboard implements OnInit {
                 datasets: [{
                     label: 'Portfolio Value',
                     data: this.snapshots.map(s => s.totalValue),
-                    borderColor: '#0d6efd',
-                    backgroundColor: 'rgba(13, 110, 253, 0.08)',
+                    borderColor: '#6366F1',
+                    backgroundColor: 'rgba(99,102,241,0.08)',
                     borderWidth: 2,
                     pointRadius: 3,
+                    pointBackgroundColor: '#6366F1',
                     fill: true,
                     tension: 0.3,
                 }]
@@ -155,10 +183,19 @@ export class Dashboard implements OnInit {
                 maintainAspectRatio: false,
                 plugins: { legend: { display: false } },
                 scales: {
+                    x: {
+                        ticks: { color: tickColor, font: { size: 11 } },
+                        grid:  { color: gridColor },
+                        border: { color: gridColor },
+                    },
                     y: {
                         ticks: {
+                            color: tickColor,
+                            font: { size: 11 },
                             callback: (value) => '$' + Number(value).toLocaleString()
-                        }
+                        },
+                        grid:  { color: gridColor },
+                        border: { color: gridColor },
                     }
                 }
             }
@@ -166,33 +203,29 @@ export class Dashboard implements OnInit {
     }
 
     private buildAllocationChart(): void {
-        if (this.allocationChart) {
-            this.allocationChart.destroy();
-        }
+        if (this.allocationChart) this.allocationChart.destroy();
 
         const ctx = this.allocationCanvas!.nativeElement.getContext('2d');
         if (!ctx || !this.portfolio) return;
+
+        const { labelColor, cardBg } = this.chartColors;
 
         const groups: Record<string, number> = {};
         for (const h of this.holdings) {
             groups[h.assetClass] = (groups[h.assetClass] ?? 0) + h.marketValue;
         }
-
-        if (this.portfolio.cashBalance > 0) {
-            groups['Cash'] = this.portfolio.cashBalance;
-        }
+        if (this.portfolio.cashBalance > 0) groups['Cash'] = this.portfolio.cashBalance;
 
         const labels = Object.keys(groups);
         const values = Object.values(groups);
 
         const colorMap: Record<string, string> = {
-            'Equity':      '#0d6efd',
-            'ETF':         '#198754',
-            'FixedIncome': '#fd7e14',
-            'Cash':        '#adb5bd',
+            'Equity':      '#6366F1',
+            'ETF':         '#10B981',
+            'FixedIncome': '#F59E0B',
+            'Cash':        '#94A3B8',
         };
-
-        const colors = labels.map(l => colorMap[l] ?? '#6c757d');
+        const colors = labels.map(l => colorMap[l] ?? '#64748B');
 
         this.allocationChart = new Chart(ctx, {
             type: 'doughnut',
@@ -201,6 +234,7 @@ export class Dashboard implements OnInit {
                 datasets: [{
                     data: values,
                     backgroundColor: colors,
+                    borderColor: cardBg,
                     borderWidth: 2,
                 }]
             },
@@ -211,7 +245,9 @@ export class Dashboard implements OnInit {
                     legend: {
                         position: 'right',
                         labels: {
+                            color: labelColor,
                             boxWidth: 12,
+                            font: { size: 12 },
                             generateLabels: (chart) => {
                                 const data  = chart.data;
                                 const total = (data.datasets[0].data as number[]).reduce((a, b) => a + b, 0);
@@ -222,6 +258,7 @@ export class Dashboard implements OnInit {
                                         text:        `${label}  ${pct}%`,
                                         fillStyle:   (data.datasets[0].backgroundColor as string[])[i],
                                         strokeStyle: (data.datasets[0].backgroundColor as string[])[i],
+                                        fontColor:   labelColor,
                                         lineWidth:   0,
                                         index:       i,
                                     };

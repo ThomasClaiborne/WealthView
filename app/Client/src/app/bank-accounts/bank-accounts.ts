@@ -52,9 +52,9 @@ export class BankAccounts implements OnInit {
 
     bankColor(bankName: string): string {
         switch (bankName) {
-            case 'Chase':         return '#cce5ff';
-            case 'BankOfAmerica': return '#f8d7da';
-            case 'Chime':         return '#d4edda';
+            case 'Chase':         return '#8dbdf0';
+            case 'BankOfAmerica': return '#f79ca3';
+            case 'Chime':         return '#7df89a';
             default:              return '#e2e3e5';
         }
     }
