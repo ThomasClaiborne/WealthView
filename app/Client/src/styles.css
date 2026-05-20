@@ -463,9 +463,12 @@ h6 { font-weight: 600; font-size: .875rem; }
 }
 
 /* ── Text color utilities ─────────────────────────────────────────── */
-.text-success { color: var(--success) !important; }
-.text-danger  { color: var(--danger)  !important; }
-.text-warning { color: var(--warning) !important; }
+.text-success,
+.table tbody td.text-success { color: var(--success) !important; }
+.text-danger,
+.table tbody td.text-danger  { color: var(--danger)  !important; }
+.text-warning,
+.table tbody td.text-warning { color: var(--warning) !important; }
 
 /* ── Misc ─────────────────────────────────────────────────────────── */
 .border-bottom { border-color: var(--border) !important; }
