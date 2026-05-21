@@ -53,6 +53,7 @@ INSERT INTO portfolio_snapshot (portfolio_id, snapshot_date, total_value) VALUES
 (2, '2026-05-13', 4390.00),
 (2, '2026-05-14', 4670.00),
 (2, '2026-05-15', 4580.00),
-(2, '2026-05-16', 4710.00);
+(2, '2026-05-16', 4710.00),
+(2, '2026-05-17', 3900.00);
 
 UPDATE portfolio_snapshot SET total_value = 3200.00 WHERE portfolio_id = 2 AND snapshot_date = '2026-05-17';
