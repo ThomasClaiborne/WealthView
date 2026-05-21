@@ -1,23 +1,29 @@
-<div class="d-flex flex-column bg-dark text-white" style="width: 240px; min-height: 100vh;">
+<div class="wv-sidebar">
 
-    <div class="p-3 border-bottom border-secondary">
-        <span class="fs-5 fw-bold">WealthView</span>
+    <div class="wv-sidebar-brand">
+        Wealth<span>View</span>
     </div>
 
-    <nav class="flex-grow-1 p-2 d-flex flex-column gap-1">
-        <a routerLink="/dashboard"    routerLinkActive="active" class="sidebar-link">Dashboard</a>
+    <nav class="wv-sidebar-nav">
+        <a routerLink="/dashboard"     routerLinkActive="active" class="sidebar-link">Dashboard</a>
         <a routerLink="/bank-accounts" routerLinkActive="active" class="sidebar-link">Bank Accounts</a>
-        <a routerLink="/transfers"    routerLinkActive="active" class="sidebar-link">Transfers</a>
-        <a routerLink="/trading"      routerLinkActive="active" class="sidebar-link">Trading</a>
-        <a routerLink="/holdings"     routerLinkActive="active" class="sidebar-link">Holdings</a>
-        <a routerLink="/trade-log"    routerLinkActive="active" class="sidebar-link">Trade Log</a>
+        <a routerLink="/transfers"     routerLinkActive="active" class="sidebar-link">Transfers</a>
+        <a routerLink="/trading"       routerLinkActive="active" class="sidebar-link">Trading</a>
+        <a routerLink="/holdings"      routerLinkActive="active" class="sidebar-link">Holdings</a>
+        <a routerLink="/trade-log"     routerLinkActive="active" class="sidebar-link">Trade Log</a>
     </nav>
 
-    <div class="p-3 border-top border-secondary">
-        @if (user) {
-            <div class="small text-white-50 mb-1">{{ user.firstName }} {{ user.lastName }}</div>
-            <div class="small text-white-50 mb-2">&#64;{{ user.username }}</div>
-        }
+    <div class="wv-sidebar-footer">
+        <div *ngIf="user" class="wv-sidebar-user">
+            <div class="wv-sidebar-user-name">{{ user.firstName }} {{ user.lastName }}</div>
+            <div class="wv-sidebar-username">&#64;{{ user.username }}</div>
+        </div>
+
+        <button class="wv-theme-toggle" (click)="toggleTheme()">
+            <span>{{ isDark ? 'Dark mode' : 'Light mode' }}</span>
+            <div class="wv-toggle-track" [class.on]="isDark"></div>
+        </button>
+
         <button (click)="logout()" class="btn btn-outline-light btn-sm w-100">Logout</button>
     </div>
 

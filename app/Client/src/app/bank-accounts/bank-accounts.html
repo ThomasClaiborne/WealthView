@@ -36,11 +36,11 @@
     <div class="d-flex align-items-center gap-3">
 
       <!-- Bank Card -->
-      <div class="rounded p-3" style="width: 260px; flex-shrink: 0;"
+      <div class="rounded p-3" style="width: 260px; flex-shrink: 0; color: #0F172A;"
            [style.background-color]="bankColor(a.bankName)">
-        <div class="fw-semibold">{{ bankLabel(a.bankName) }}</div>
-        <div class="text-muted small mb-1">{{ a.nickname ?? '—' }}</div>
-        <div class="fs-5 fw-bold">${{ a.balance | number:'1.2-2' }}</div>
+        <div class="fw-semibold" style="color: #0F172A;">{{ bankLabel(a.bankName) }}</div>
+        <div class="small mb-1" style="color: #64748B;">{{ a.nickname ?? '—' }}</div>
+        <div class="fs-5 fw-bold" style="color: #0F172A;">${{ a.balance | number:'1.2-2' }}</div>
       </div>
 
       <!-- Actions -->

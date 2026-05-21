@@ -60,9 +60,9 @@
             <td>${{ h.avgCost | number:'1.2-2' }}</td>
             <td>${{ h.currentPrice | number:'1.2-2' }}</td>
             <td>${{ h.marketValue | number:'1.2-2' }}</td>
-            <td [class.text-success]="h.unrealizedGl >= 0"
+            <td [class.text-success]="h.unrealizedGl > 0"
                 [class.text-danger]="h.unrealizedGl < 0">
-              {{ h.unrealizedGl >= 0 ? '+' : '' }}${{ h.unrealizedGl | number:'1.2-2' }}
+              {{ h.unrealizedGl > 0 ? '+' : '' }}${{ h.unrealizedGl | number:'1.2-2' }}
               ({{ h.unrealizedGlPct | number:'1.2-2' }}%)
             </td>
             <td>{{ h.portfolioWeight | number:'1.2-2' }}%</td>
