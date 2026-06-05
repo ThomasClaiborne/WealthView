@@ -1,0 +1,151 @@
+<div class="container-fluid py-4">
+  <h2 class="mb-4">Dashboard</h2>
+
+  <div *ngIf="errorMessage" class="alert alert-danger">{{ errorMessage }}</div>
+
+  <!-- Loading state -->
+  <div *ngIf="!portfolioReady" class="text-muted mt-2">Loading dashboard...</div>
+
+  <!-- Full dashboard — only renders once portfolio data has arrived -->
+  <div *ngIf="portfolioReady">
+
+    <div class="d-flex gap-4 align-items-start">
+
+      <!-- LEFT COLUMN -->
+      <div class="flex-grow-1">
+
+        <!-- Metric Cards -->
+        <div class="row g-3 mb-4">
+          <div class="col-4">
+            <div class="card">
+              <div class="card-body">
+                <h6 class="card-subtitle text-muted mb-1">Total Portfolio Value</h6>
+                <p class="card-text fs-5 fw-semibold">${{ portfolio!.totalValue | number:'1.2-2' }}</p>
+              </div>
+            </div>
+          </div>
+          <div class="col-4">
+            <div class="card">
+              <div class="card-body">
+                <h6 class="card-subtitle text-muted mb-1">Cash Balance</h6>
+                <p class="card-text fs-5 fw-semibold">${{ portfolio!.cashBalance | number:'1.2-2' }}</p>
+              </div>
+            </div>
+          </div>
+          <div class="col-4">
+            <div class="card">
+              <div class="card-body">
+                <h6 class="card-subtitle text-muted mb-1">Unrealized G/L</h6>
+                <p class="card-text fs-5 fw-semibold"
+                   [class.text-success]="portfolio!.totalUnrealizedGl >= 0"
+                   [class.text-danger]="portfolio!.totalUnrealizedGl < 0">
+                  {{ portfolio!.totalUnrealizedGl >= 0 ? '+' : '' }}${{ portfolio!.totalUnrealizedGl | number:'1.2-2' }}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Portfolio Performance Chart -->
+        <div class="card mb-4">
+          <div class="card-body">
+            <h6 class="fw-semibold mb-3">Portfolio Performance</h6>
+            <div style="height: 200px; position: relative;">
+              <canvas #performanceCanvas></canvas>
+              <div *ngIf="snapshots.length === 0"
+                   class="d-flex align-items-center justify-content-center text-muted h-100"
+                   style="position: absolute; inset: 0;">
+                No snapshot data yet — visit again tomorrow.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Asset Allocation Chart -->
+        <div class="card">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <h6 class="fw-semibold mb-0">Asset Allocation</h6>
+              <a routerLink="/holdings" class="small text-muted">view all holdings →</a>
+            </div>
+            <div style="height: 200px; position: relative;">
+              <canvas #allocationCanvas></canvas>
+              <div *ngIf="holdings.length === 0 && !portfolio!.cashBalance"
+                   class="d-flex align-items-center justify-content-center text-muted h-100"
+                   style="position: absolute; inset: 0;">
+                No holdings yet.
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- RIGHT COLUMN -->
+      <div style="width: 320px; flex-shrink: 0;">
+
+        <!-- Bank Accounts Preview -->
+        <div class="card mb-3">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <h6 class="mb-0 fw-semibold">Bank Accounts</h6>
+              <a routerLink="/bank-accounts" class="small text-muted">view all →</a>
+            </div>
+            <div *ngFor="let a of bankAccounts.slice(0, 3)"
+                 class="d-flex justify-content-between py-1 border-bottom">
+              <span class="small">{{ bankLabel(a.bankName) }}{{ a.nickname ? ' — ' + a.nickname : '' }}</span>
+              <span class="small fw-semibold">${{ a.balance | number:'1.2-2' }}</span>
+            </div>
+            <div *ngIf="bankAccounts.length === 0" class="text-muted small mt-1">No bank accounts.</div>
+          </div>
+        </div>
+
+        <!-- Recent Trades Preview -->
+        <div class="card mb-3">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <h6 class="mb-0 fw-semibold">Recent Trades</h6>
+              <a routerLink="/trade-log" class="small text-muted">view all →</a>
+            </div>
+            <div *ngFor="let t of recentTrades"
+                 class="d-flex align-items-center gap-2 py-1 border-bottom">
+              <span class="badge"
+                    [class.bg-success]="t.tradeType === 'Buy'"
+                    [class.bg-danger]="t.tradeType === 'Sell'">
+                {{ t.tradeType | uppercase }}
+              </span>
+              <span class="small">
+                {{ t.ticker }} — {{ t.quantity | number:'1.0-0' }} @ ${{ t.pricePerShare | number:'1.2-2' }}
+              </span>
+            </div>
+            <div *ngIf="recentTrades.length === 0" class="text-muted small mt-1">No trades yet.</div>
+          </div>
+        </div>
+
+        <!-- Pending Transfers Preview -->
+        <div class="card">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <h6 class="mb-0 fw-semibold">Pending Transfers</h6>
+              <a routerLink="/transfers" class="small text-muted">view all →</a>
+            </div>
+            <div *ngFor="let t of pendingTransfers.slice(0, 3)"
+                 class="d-flex justify-content-between align-items-center py-1 border-bottom">
+              <span class="d-flex align-items-center gap-2">
+                <span class="badge"
+                      [class.bg-success]="t.direction === 'Deposit'"
+                      [class.bg-danger]="t.direction === 'Withdrawal'">
+                  {{ t.direction | uppercase }}
+                </span>
+                <span class="small">${{ t.amount | number:'1.2-2' }}</span>
+              </span>
+              <span class="badge bg-warning text-dark">PENDING</span>
+            </div>
+            <div *ngIf="pendingTransfers.length === 0" class="text-muted small mt-1">No pending transfers.</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>

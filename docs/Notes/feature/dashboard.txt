@@ -1,0 +1,130 @@
+
+C# / ASP.NET Core:
+
+- Domain Driven Design — Aggregate Root
+    portfolio_snapshot belongs to the portfolio aggregate — it has no meaning outside a portfolio
+    instead of creating ISnapshotRepository + ISnapshotService (Table Driven Design),
+        the snapshot methods were added directly to IPortfolioRepository and PortfolioService
+    Table Driven Design: one repo per table, one service per repo
+    Domain Driven Design: one repo per aggregate root — a repo can touch multiple tables
+        if those tables are part of the same domain concept
+    rule: ask "can this entity exist independently?" — if no, it belongs to the parent aggregate
+    snapshot rows are owned by portfolio, deleted with portfolio, meaningless without portfolio
+    contrast: Security is its own aggregate root — it exists independently of any portfolio
+
+- EnsureTodaySnapshot — idempotent side effect
+    called inside PortfolioService.GetByUserId after computing TotalValue
+    checks if a snapshot already exists for today → if yes, does nothing → if no, creates one
+    idempotent: calling it 100 times on the same day produces exactly one snapshot row
+    this is a side effect of loading the portfolio, not a separate operation
+    why here and not a scheduled job: this app has no background task infrastructure
+        piggybacking on the dashboard load guarantees one snapshot per active day
+        a user who never logs in gets no snapshot — accurate, they had no activity
+    private method — callers never trigger snapshot creation directly
+
+- DateOnly vs DateTime for DATE columns
+    MySQL DATE column stores only a calendar date: 2026-05-17
+    DateOnly maps directly to DATE — no time component, no timezone confusion
+    DateTime maps to DATETIME — storing a DateTime in a DATE column truncates the time
+    use DateOnly for any column that is conceptually a date not a point in time
+    EF Core + Pomelo requires explicit HasColumnType("date") to prevent Pomelo from
+        defaulting DateOnly to datetime in the generated SQL
+
+- AnyAsync vs FirstOrDefaultAsync for existence checks
+    SnapshotExistsForToday uses AnyAsync — returns bool, stops at first matching row
+    FirstOrDefaultAsync loads the full entity — unnecessary when you only need to know if it exists
+    AnyAsync generates: SELECT 1 FROM ... WHERE ... LIMIT 1
+    FirstOrDefaultAsync generates: SELECT all columns FROM ... WHERE ... LIMIT 1
+    rule: when you only need a boolean answer, use AnyAsync
+
+─────────────────────────────────────────────────────────────────────────────────────
+
+Angular:
+
+    Chart.js Integration
+
+        - npm install chart.js
+            Chart.js is a standalone JS charting library — not Angular-specific
+            imported directly into the component: import { Chart, registerables } from 'chart.js'
+            Chart.register(...registerables) must be called once before creating any chart
+                registerables includes all chart types, scales, and plugins bundled together
+                without this call Chart.js throws: "line is not a registered controller"
+            placed at module level (outside the class) so it runs once when the file loads
+
+        - Chart instance management
+            each chart is stored as a private class field: private performanceChart: Chart | null
+            before building a chart, call .destroy() on the existing instance if it exists
+            without destroy: Chart.js throws "Canvas is already in use" on rebuild
+            destroy releases the canvas context so it can be reused
+
+        - canvas element access via @ViewChild
+            @ViewChild('performanceCanvas') references the #performanceCanvas template variable
+            declared as optional (?) not required (!) because the canvas only exists in the DOM
+                after the *ngIf="portfolioReady" block renders — accessing it before that is undefined
+            nativeElement gives the raw HTMLCanvasElement
+            .getContext('2d') returns the 2D rendering context Chart.js needs
+
+    AfterViewInit vs canvas existence check
+
+        - why AfterViewInit failed
+            AfterViewInit fires once after the component's first render
+            but the chart canvases are inside *ngIf="portfolioReady" — they don't exist on first render
+            when portfolioReady becomes true Angular re-renders the block, but AfterViewInit never fires again
+            result: viewReady was set but canvases didn't exist yet — charts never built
+
+        - canvas existence check as the guard
+            tryBuildCharts() checks performanceCanvas?.nativeElement and allocationCanvas?.nativeElement
+            if either returns undefined, canvases aren't in the DOM yet — return early
+            every data callback (holdings, snapshots) calls tryBuildCharts()
+            when portfolioReady becomes true, a setTimeout(50ms) fires tryBuildCharts()
+                50ms gives Angular time to run change detection and render the *ngIf block
+            whichever call finds both canvases present and all data loaded wins and builds
+
+    Sequential vs parallel HTTP calls
+
+        - why snapshot history must be called after portfolio, not in parallel
+            GET /api/portfolio triggers EnsureTodaySnapshot as a server-side side effect
+                the snapshot row is written to DB before the response returns
+            GET /api/portfolio/snapshots fired in parallel races against that write
+                it frequently returns before the snapshot is committed → empty list → blank chart
+            solution: nest the getSnapshotHistory() call inside the portfolio subscribe next callback
+                by the time next fires, the portfolio response has returned and the snapshot exists
+            lesson: when call B depends on a side effect of call A, B must be sequential not parallel
+
+        - other calls stay parallel
+            bank accounts, trades, transfers, holdings have no dependency on each other
+            they fire simultaneously in ngOnInit — all four HTTP requests in flight at once
+            each callback updates its own state independently when it arrives
+            parallel HTTP = faster total load time for independent data
+
+    retry pattern for first login
+
+        - why the first dashboard load fails on a new account
+            registration creates the portfolio inside the auth transaction
+            the JWT is returned and Angular immediately redirects to /dashboard
+            getPortfolio() fires before the portfolio write is fully committed in MySQL
+            result: 404 on the first request → dashboard shows error
+
+        - loadPortfolioWithRetry(attempts)
+            on error: if attempts < 3, schedule another call via setTimeout(800ms) then recurse
+            on success: proceed normally
+            3 retries × 800ms = 2.4 seconds max wait — more than enough for DB commit
+            only shows the error message after all retries exhausted — genuine failure
+            why not RxJS retryWhen: setTimeout + recursion is simpler and doesn't require
+                importing additional RxJS operators for a one-off pattern
+
+    Chart data construction
+
+        - line chart (portfolio performance)
+            x axis labels: snapshotDate strings formatted as "May 17" via toLocaleDateString
+            y axis data: totalValue decimals
+            single dataset, blue line with light fill, tension: 0.3 for smooth curve
+            y axis tick callback formats numbers as "$25,000" not raw floats
+
+        - donut chart (asset allocation)
+            groups holdings by assetClass, sums marketValue per group
+            adds cashBalance as a "Cash" slice — portfolio is never fully invested
+            color map: Equity = blue, ETF = green, FixedIncome = orange, Cash = grey
+            generateLabels override adds percentage to each legend item: "Equity  68.4%"
+            tooltip callback shows dollar value and percentage: "$18,500.00 (68.4%)"
+            total is computed by reducing the dataset values — never stored separately

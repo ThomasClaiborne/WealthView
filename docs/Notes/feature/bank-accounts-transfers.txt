@@ -1,0 +1,188 @@
+
+C# / ASP.NET Core:
+
+- Soft delete pattern (is_active flag)
+    deleting a bank account sets is_active = false — the row is never removed from the DB
+    GetAllByUserId filters WHERE is_active = true so deactivated accounts never appear in results
+    GetByUserAndBank does NOT filter by is_active — it intentionally returns inactive accounts too
+        the service needs to find inactive accounts to handle the reactivation path
+    why not hard delete: fund_transfer rows reference bank_account via FK
+        hard deleting the account would orphan transfer history or require cascading deletes
+        soft delete preserves the full audit trail indefinitely
+    rule: any table that other tables reference via FK is a soft-delete candidate
+
+- Reactivation path (add account branching logic)
+    adding a bank account has three possible paths, checked in order:
+        1. active account exists for this bank → Conflict (409) — user already has one
+        2. inactive account exists for this bank → reactivate it (Update, not Create)
+        3. no prior account → Create a new row
+    the branching is driven by GetByUserAndBank returning the inactive row
+    reactivation updates: IsActive = true, Balance = newStartingBalance, LastActivatedAt = now
+    why reactivate instead of always creating: uq_user_bank unique constraint only allows one row
+        per user per bank — a second insert would throw a DB-level duplicate key exception
+        reactivation respects the schema constraint and preserves the original account's history
+
+- Ownership check pattern (Deposit, Withdraw, Deactivate)
+    controller reads userId from JWT claims, passes it into the service method
+    service loads the entity, then compares entity.AppUserId == userId before proceeding
+    if mismatch: return NotFound (not Forbidden) for deposit/withdraw — never confirm the account exists
+        an attacker guessing IDs should not learn whether that account belongs to someone else
+    Deactivate returns Forbidden explicitly — the distinction matters for the service test
+        a user trying to delete another user's account is a different failure than "account not found"
+    this pattern appears wherever a resource belongs to a specific user:
+        bank account → AppUserId
+        fund transfer → PortfolioId (which is derived from the authenticated user's JWT)
+
+- Pending → Approved/Rejected workflow (status machine)
+    FundTransfer.Status starts as Pending on creation — no balance changes occur at this point
+    Approve: validates status == Pending, executes the balance swap, sets status = Approved + resolvedAt = now
+    Reject: validates status == Pending, makes NO balance changes, sets status = Rejected + resolvedAt = now
+    both Approve and Reject check status before acting — calling either on an already-resolved transfer
+        returns Invalid — prevents double-approving or re-rejecting
+    this is a simple state machine: Pending is the only valid starting state for transitions
+    Java equivalent: an enum-driven state machine with allowed transition checks in the service
+
+- Approve executes both sides of the transfer atomically
+    a Deposit (bank → portfolio): bank.Balance -= amount, portfolio.CashBalance += amount
+    a Withdrawal (portfolio → bank): portfolio.CashBalance -= amount, bank.Balance += amount
+    both repo calls happen in the same service method — not wrapped in BeginTransactionAsync
+        same known tradeoff as Slice 3: a crash between the two calls could leave inconsistent state
+        production fix: inject AppDbContext directly and wrap in a single transaction
+    the transfer status update (Approved + resolvedAt) happens after both balance changes
+        if the status write fails after balances moved, the transfer stays Pending but balances changed
+        acceptable for this app — in production this must all be one transaction
+
+- Private helper methods on controllers (GetUserId, GetPortfolioId)
+    GetUserId() extracts and parses the userId claim — repeated in every action otherwise
+    GetPortfolioId() calls PortfolioService.GetByUserId() — every FundTransferController action needs it
+    extracting these as private methods follows DRY — same reason you extract repeated service calls
+        into a private helper in a Java service class
+    GetPortfolioId returns null if portfolio not found — controller returns NotFound before calling the service
+    this keeps action methods short: guard → get IDs → call service → map result → return
+
+- Conflict (409) as an HTTP status
+    used when a request is valid but violates a business uniqueness rule
+    here: adding a bank account when an active one already exists for that bank
+    distinct from 400 Bad Request (invalid data) and 422 Unprocessable (validation failure)
+    mapped in the controller: result.Type switch { ResultType.Conflict → Conflict(result.Messages) }
+    ResultType.Conflict was already in the enum — this is the first slice to actually use it
+
+- ResultType.Forbidden → 403
+    returned by Deactivate when the account exists but belongs to another user
+    controller maps: ResultType.Forbidden → StatusCode(403, result.Messages)
+    distinct from 401 Unauthorized (not authenticated) and 404 Not Found (doesn't exist)
+    403 means: I know who you are, and you are not allowed to do this
+
+─────────────────────────────────────────────────────────────────────────────────────
+
+EF Core:
+
+- .Include() on FundTransfer queries
+    GetPendingByPortfolioId, GetHistoryByPortfolioId, and GetById all use .Include(f => f.BankAccount)
+    FundTransferResponse needs BankName and Nickname from the related BankAccount row
+    without Include: f.BankAccount is null → ToResponse() crashes on f.BankAccount.BankName
+    GetById does not use AsNoTracking because Approve and Reject will modify and save the result
+    GetPending and GetHistory use AsNoTracking — results are read-only for display
+
+- Update only touches fields that should change
+    EfBankAccountRepository.Update copies only: Balance, IsActive, Nickname, LastActivatedAt
+    EfFundTransferRepository.Update copies only: Status, ResolvedAt
+    BankAccountId, AppUserId, BankName, CreatedAt are identity/audit fields — never overwritten after insert
+    this prevents a caller from accidentally passing a modified object that changes the wrong columns
+    same discipline as the Slice 3 holding update — intentional field selection, not entity replacement
+
+─────────────────────────────────────────────────────────────────────────────────────
+
+Testing (xUnit + Moq):
+
+- Testing all three branching paths for Add
+    one unit test per branch: active exists → Conflict, inactive exists → Update called, none exists → Create called
+    Verify() confirms which repo method was called and which was not
+        Add_ReactivatesAccount: Verify Update called once, Verify Create never called
+        Add_CreatesNew:         Verify Create called once, Verify Update never called
+    without these Verify calls the test could pass even if the wrong branch executed
+
+- Ownership check tests
+    Deposit_ReturnsNotFound_WhenAccountBelongsToOtherUser: passes userId=1 but account.AppUserId=2
+    verifies the service returns NotFound not Forbidden for mismatch on deposit/withdraw
+    Deactivate_ReturnsForbidden_WhenAccountBelongsToOtherUser: same setup, different expected ResultType
+    these two tests together document the intentional distinction between the two behaviors
+
+- Approve balance direction tests
+    two separate tests: one for Deposit direction, one for Withdrawal direction
+    each uses Verify to confirm the exact decimal values passed to UpdateCashBalance and Update
+        Approve_ExecutesDeposit: bank.Balance 1000→500, portfolio.CashBalance 200→700
+        Approve_ExecutesWithdrawal: portfolio.CashBalance 1000→700, bank.Balance 500→800
+    the math is explicit in the test — documents the business rule, not just the result
+
+─────────────────────────────────────────────────────────────────────────────────────
+
+Angular:
+
+    Tab switching with a component property
+
+        - activeTab: 'pending' | 'history' = 'pending'
+            a TypeScript union type — only these two string values are valid
+            clicking a tab button sets activeTab to the corresponding value
+            *ngIf="activeTab === 'pending'" and *ngIf="activeTab === 'history'" show one section at a time
+            no router navigation — both datasets are already loaded on ngOnInit
+            this is client-side tab switching: all data is in memory, display toggled by a property
+
+        - loading all data upfront in ngOnInit
+            getPending(), getHistory(), and getAll() (bank accounts) all fire on load
+            after approve or reject, loadAll() re-fires all three calls to refresh every section
+            no selective refresh — simpler than tracking which subset changed
+            tradeoff: three HTTP calls on every approve/reject vs complexity of targeted updates
+
+    Direction toggle (Deposit / Withdrawal)
+
+        - two buttons acting as a toggle group
+            direction: 'Deposit' | 'Withdrawal' = 'Deposit' holds the current selection
+            [class.btn-primary]="direction === 'Deposit'" applies the active style conditionally
+            [class.btn-outline-secondary]="direction !== 'Deposit'" applies the inactive style
+            clicking either button sets direction to its value — the classes swap automatically
+            no radio inputs needed — the property drives both the visual state and the submitted value
+
+    Bank color mapping via a method
+
+        - bankColor(bankName: string): string
+            returns a hex color string based on the bank name
+            Chase → blue (#cce5ff), BankOfAmerica → red (#f8d7da), Chime → green (#d4edda)
+            called in the template: [style.background-color]="bankColor(a.bankName)"
+            a method is used instead of a pipe because the logic is specific to this component
+            bankLabel() handles the display name: 'BankOfAmerica' → 'Bank of America'
+            both methods are called on every change detection cycle — kept simple and side-effect free
+
+    Inline adjust form pattern
+
+        - selectedId: number | null and adjustMode: 'deposit' | 'withdraw' | null
+            openAdjust(id, mode) sets both — which account and what operation
+            *ngIf="selectedId === a.bankAccountId" inside the *ngFor renders the form only under
+                the specific account card that was clicked — not a modal, not a separate section
+            cancel clears selectedId back to null — the form disappears from the DOM
+            pattern: store the ID of the selected item, render the inline form conditionally per row
+
+    Dashboard layout — fixed right column, growing left column
+
+        - flex-grow-1 on left, fixed width on right (style="width: 320px; flex-shrink: 0;")
+            same pattern as trading/holdings buy-sell form layout
+            left column grows to fill all remaining space after right column claims 320px
+            right column never shrinks below 320px regardless of viewport width
+            three cards stacked vertically in the right column with mb-3 spacing between them
+
+        - chart placeholders for Slice 5
+            dashed border divs mark where Chart.js canvases will go
+            style="border: 2px dashed #dee2e6; border-radius: 8px; height: 180px"
+            Slice 5 replaces each placeholder div with a <canvas> element — no layout changes needed
+            this approach locks the layout structure now so Slice 5 is purely a chart implementation task
+
+    Dashboard fetching multiple data sources in one ngOnInit
+
+        - four independent subscribe calls in ngOnInit
+            getPortfolio(), getAll() (bank accounts), getPending() (transfers), getAll() (trades)
+            each has its own next/error callback — one failing does not block the others
+            each calls cdr.markForCheck() independently so partial data renders as it arrives
+            error callbacks are mostly silent (empty lambda) for preview sections — dashboard still
+                loads usefully even if one secondary call fails
+            contrast with sequential awaits: parallel subscribes fire all four HTTP calls simultaneously
+                rather than waiting for each to complete before starting the next

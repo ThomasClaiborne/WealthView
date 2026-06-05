@@ -1,0 +1,117 @@
+@baseUrl = http://localhost:5266
+
+### Step 1 — Login to get token (run first)
+# @name login
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "credential": "tclaiborne",
+  "password": "Password1!"
+}
+
+###
+
+### Step 2 — Get holdings → expect 200 + list with computed fields
+GET {{baseUrl}}/api/holdings
+Authorization: Bearer {{login.response.body.token}}
+
+###
+
+### Step 3 — Get trade log → expect 200 + list ordered newest first
+GET {{baseUrl}}/api/trades
+Authorization: Bearer {{login.response.body.token}}
+
+###
+
+### Step 4 — Buy shares → expect 201 + TradeResponse with NewCashBalance
+POST {{baseUrl}}/api/trades/buy
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "ticker": "AAPL",
+  "quantity": 2
+}
+
+###
+
+### Step 5 — Verify holdings updated after buy → AAPL quantity increased
+GET {{baseUrl}}/api/holdings
+Authorization: Bearer {{login.response.body.token}}
+
+###
+
+### Step 6 — Verify portfolio cash decreased after buy
+GET {{baseUrl}}/api/portfolio
+Authorization: Bearer {{login.response.body.token}}
+
+###
+
+### Step 7 — Sell partial shares → expect 201 + TradeResponse
+POST {{baseUrl}}/api/trades/sell
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "ticker": "AAPL",
+  "quantity": 1
+}
+
+###
+
+### Step 8 — Sell ALL remaining shares → holding should be deleted
+POST {{baseUrl}}/api/trades/sell
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "ticker": "AAPL",
+  "quantity": 6
+}
+
+###
+
+### Step 9 — Buy unknown ticker → expect 404
+POST {{baseUrl}}/api/trades/buy
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "ticker": "FAKE",
+  "quantity": 1
+}
+
+###
+
+### Step 10 — Sell ticker you don't own → expect 400
+POST {{baseUrl}}/api/trades/sell
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "ticker": "MSFT",
+  "quantity": 1
+}
+
+###
+
+### Step 11 — Buy more than cash allows → expect 400
+POST {{baseUrl}}/api/trades/buy
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "ticker": "AAPL",
+  "quantity": 999999
+}
+
+###
+
+### Step 12 — Hit holdings without token → expect 401
+GET {{baseUrl}}/api/holdings
+
+###
+
+### Step 13 — Hit trades without token → expect 401
+GET {{baseUrl}}/api/trades

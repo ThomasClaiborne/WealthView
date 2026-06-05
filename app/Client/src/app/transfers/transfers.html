@@ -1,0 +1,154 @@
+<div class="container-fluid py-4">
+  <h2 class="mb-4">Fund Transfers</h2>
+
+  <div *ngIf="errorMessage" class="alert alert-danger">{{ errorMessage }}</div>
+  <div *ngIf="successMessage" class="alert alert-success">{{ successMessage }}</div>
+
+  <div class="d-flex gap-4 align-items-start">
+
+    <!-- New Transfer Form (left) -->
+    <div class="card" style="width: 300px; flex-shrink: 0;">
+      <div class="card-body">
+        <h5 class="card-title mb-3">New Transfer</h5>
+
+        <label class="form-label">Bank Account</label>
+        <select class="form-select mb-3" [(ngModel)]="selectedBankAccountId">
+          <option *ngFor="let a of accounts" [value]="a.bankAccountId">
+            {{ a.bankName === 'BankOfAmerica' ? 'Bank of America' : a.bankName }}
+            {{ a.nickname ? '— ' + a.nickname : '' }}
+            — ${{ a.balance | number:'1.2-2' }}
+          </option>
+        </select>
+
+        <label class="form-label">Direction</label>
+        <div class="d-flex gap-2 mb-3">
+          <button class="btn btn-sm w-50"
+                  [class.btn-primary]="direction === 'Deposit'"
+                  [class.btn-outline-secondary]="direction !== 'Deposit'"
+                  (click)="direction = 'Deposit'">
+            Deposit
+          </button>
+          <button class="btn btn-sm w-50"
+                  [class.btn-primary]="direction === 'Withdrawal'"
+                  [class.btn-outline-secondary]="direction !== 'Withdrawal'"
+                  (click)="direction = 'Withdrawal'">
+            Withdrawal
+          </button>
+        </div>
+
+        <label class="form-label">Amount</label>
+        <input type="number" class="form-control mb-3"
+               [(ngModel)]="amount" min="0.01" step="0.01" placeholder="$0.00" />
+
+        <button class="btn btn-warning w-100" [disabled]="loading || !selectedBankAccountId"
+                (click)="submitRequest()">
+          {{ loading ? 'Submitting...' : 'Submit Request' }}
+        </button>
+      </div>
+    </div>
+
+    <!-- Transfer List (right) -->
+    <div class="flex-grow-1">
+
+      <!-- Tabs -->
+      <ul class="nav nav-tabs mb-3">
+        <li class="nav-item">
+          <button class="nav-link" [class.active]="activeTab === 'pending'"
+                  (click)="activeTab = 'pending'">
+            Pending <span class="badge bg-secondary ms-1">{{ pending.length }}</span>
+          </button>
+        </li>
+        <li class="nav-item">
+          <button class="nav-link" [class.active]="activeTab === 'history'"
+                  (click)="activeTab = 'history'">
+            History
+          </button>
+        </li>
+      </ul>
+
+      <!-- Pending Tab -->
+      <div *ngIf="activeTab === 'pending'">
+        <table *ngIf="pending.length > 0" class="table table-hover">
+          <thead>
+            <tr>
+              <th>Direction</th>
+              <th>Bank</th>
+              <th>Amount</th>
+              <th>Status</th>
+              <th>Date</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let t of pending">
+              <td>
+                <span class="badge" [class]="directionBadgeClass(t.direction)">
+                  {{ t.direction | uppercase }}
+                </span>
+              </td>
+              <td>
+                {{ t.bankName === 'BankOfAmerica' ? 'BOA' : t.bankName }}
+                <span *ngIf="t.bankNickname" class="text-muted small"> — {{ t.bankNickname }}</span>
+              </td>
+              <td>${{ t.amount | number:'1.2-2' }}</td>
+              <td>
+                <span class="badge" [class]="statusBadgeClass(t.status)">
+                  {{ t.status | uppercase }}
+                </span>
+              </td>
+              <td>{{ t.createdAt | date:'mediumDate' }}</td>
+              <td>
+                <div class="d-flex gap-1">
+                  <button class="btn btn-sm btn-outline-success" (click)="approve(t.fundTransferId)">
+                    Approve
+                  </button>
+                  <button class="btn btn-sm btn-outline-danger" (click)="reject(t.fundTransferId)">
+                    Reject
+                  </button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <div *ngIf="pending.length === 0" class="text-muted">No pending transfers.</div>
+      </div>
+
+      <!-- History Tab -->
+      <div *ngIf="activeTab === 'history'">
+        <table *ngIf="history.length > 0" class="table table-hover">
+          <thead>
+            <tr>
+              <th>Direction</th>
+              <th>Bank</th>
+              <th>Amount</th>
+              <th>Status</th>
+              <th>Resolved</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let t of history">
+              <td>
+                <span class="badge" [class]="directionBadgeClass(t.direction)">
+                  {{ t.direction | uppercase }}
+                </span>
+              </td>
+              <td>
+                {{ t.bankName === 'BankOfAmerica' ? 'BOA' : t.bankName }}
+                <span *ngIf="t.bankNickname" class="text-muted small"> — {{ t.bankNickname }}</span>
+              </td>
+              <td>${{ t.amount | number:'1.2-2' }}</td>
+              <td>
+                <span class="badge" [class]="statusBadgeClass(t.status)">
+                  {{ t.status | uppercase }}
+                </span>
+              </td>
+              <td>{{ t.resolvedAt | date:'mediumDate' }}</td>
+            </tr>
+          </tbody>
+        </table>
+        <div *ngIf="history.length === 0" class="text-muted">No transfer history.</div>
+      </div>
+
+    </div>
+  </div>
+</div>

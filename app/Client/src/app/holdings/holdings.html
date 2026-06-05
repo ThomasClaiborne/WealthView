@@ -1,0 +1,79 @@
+<div class="container-fluid py-4">
+  <h2 class="mb-4">Holdings</h2>
+
+  <div *ngIf="errorMessage" class="alert alert-danger">{{ errorMessage }}</div>
+  <div *ngIf="successMessage" class="alert alert-success">{{ successMessage }}</div>
+
+  <div class="d-flex gap-4 align-items-start">
+
+    <!-- Sell Form (left — only exists when a holding is selected) -->
+    <div *ngIf="selectedHolding" class="card" style="width: 300px; flex-shrink: 0;">
+      <div class="card-body">
+        <h5 class="card-title">Sell {{ selectedHolding.ticker }}</h5>
+        <p class="text-muted mb-1">{{ selectedHolding.companyName }}</p>
+        <p class="mb-1">
+          You own: <strong>{{ selectedHolding.quantity | number:'1.0-0' }} shares</strong>
+        </p>
+        <p class="mb-3">
+          Current Price: <strong>${{ selectedHolding.currentPrice | number:'1.2-2' }}</strong>
+        </p>
+
+        <label class="form-label">Quantity to Sell (max {{ selectedHolding.quantity | number:'1.0-0' }})</label>
+        <input type="number" class="form-control mb-2"
+               [(ngModel)]="sellQuantity"
+               min="1" [max]="selectedHolding.quantity" step="1" />
+
+        <p class="text-muted mb-1">
+          Proceeds: <strong>${{ estimatedProceeds | number:'1.2-2' }}</strong>
+        </p>
+
+        <div class="d-flex gap-2 mt-3">
+          <button class="btn btn-danger" [disabled]="loading" (click)="confirmSell()">
+            {{ loading ? 'Processing...' : 'Confirm Sell' }}
+          </button>
+          <button class="btn btn-outline-secondary" (click)="selectedHolding = null">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Holdings Table (right — expands to full width when no form) -->
+    <div class="flex-grow-1">
+      <table *ngIf="holdings.length > 0" class="table table-hover">
+        <thead>
+          <tr>
+            <th>Ticker</th>
+            <th>Company</th>
+            <th>Shares</th>
+            <th>Avg Cost</th>
+            <th>Current Price</th>
+            <th>Market Value</th>
+            <th>Unrealized G/L</th>
+            <th>Weight</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let h of holdings">
+            <td><strong>{{ h.ticker }}</strong></td>
+            <td>{{ h.companyName }}</td>
+            <td>{{ h.quantity | number:'1.0-0' }}</td>
+            <td>${{ h.avgCost | number:'1.2-2' }}</td>
+            <td>${{ h.currentPrice | number:'1.2-2' }}</td>
+            <td>${{ h.marketValue | number:'1.2-2' }}</td>
+            <td [class.text-success]="h.unrealizedGl > 0"
+                [class.text-danger]="h.unrealizedGl < 0">
+              {{ h.unrealizedGl > 0 ? '+' : '' }}${{ h.unrealizedGl | number:'1.2-2' }}
+              ({{ h.unrealizedGlPct | number:'1.2-2' }}%)
+            </td>
+            <td>{{ h.portfolioWeight | number:'1.2-2' }}%</td>
+            <td>
+              <button class="btn btn-sm btn-outline-danger" (click)="selectHolding(h)">Sell</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <div *ngIf="holdings.length === 0 && !errorMessage" class="text-muted">No holdings yet.</div>
+    </div>
+
+  </div>
+</div>

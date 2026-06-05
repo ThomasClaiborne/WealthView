@@ -113,6 +113,7 @@ StyleCopReport.xml
 *.pgc
 *.pgd
 *.rsp
+*.lscache
 # but not Directory.Build.rsp, as it configures directory-level build defaults
 !Directory.Build.rsp
 *.sbr
@@ -410,6 +411,9 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+
+# Local study notes — not for version control
+study/
 
 # VS Code files for those working on multiple tools
 .vscode/*
