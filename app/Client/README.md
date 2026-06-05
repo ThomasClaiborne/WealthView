@@ -1,6 +1,6 @@
 # WealthView — Client
 
-Angular 21 frontend for the WealthView portfolio management application. Provides a reactive, single-page interface for trading, holdings tracking, and portfolio analytics.
+Angular 21 frontend for WealthView, an investment simulator for learning portfolio management without real financial risk. Provides a reactive, single-page interface for trading, holdings tracking, and portfolio analytics.
 
 ---
 

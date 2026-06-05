@@ -1,14 +1,16 @@
 # WealthView
 
-A full-stack portfolio management application for tracking investment holdings, executing trades, and monitoring portfolio performance over time.
+A full-stack investment simulator built as a learning tool — practice buying and selling securities, managing a portfolio, and tracking performance without risking real money.
 
 ---
 
 ## Overview
 
-WealthView lets users manage a simulated investment portfolio end-to-end — from linking bank accounts and depositing funds, to buying and selling securities, to tracking performance with historical snapshots. Live stock prices are pulled from the Alpha Vantage API, and all trade history is preserved as an immutable audit log.
+WealthView gives users a realistic investing environment to build financial literacy and intuition. Accounts start with cash that can be funded through simulated bank transfers, and from there users can trade real tickers at live market prices, track their holdings, and see how their portfolio performs over time.
 
-The backend enforces all business logic (cash validation, weighted average cost basis, transfer approval), while the frontend delivers a clean, reactive interface across seven feature pages.
+The goal is to lower the barrier to learning how investing works. By removing real financial risk, users can experiment freely — try different strategies, make mistakes, and understand concepts like cost basis, unrealized gain/loss, and asset allocation through hands-on experience rather than theory.
+
+Live prices come from the Alpha Vantage API. All trade history is preserved as an immutable audit log, and portfolio value snapshots power a historical performance chart.
 
 ---
 

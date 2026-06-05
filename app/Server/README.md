@@ -1,6 +1,6 @@
 # WealthView — Server
 
-ASP.NET Core 9 REST API for the WealthView portfolio management application. Handles authentication, trade execution, holdings tracking, fund transfers, and live market data.
+ASP.NET Core 9 REST API powering WealthView, an investment simulator for learning portfolio management without real financial risk. Handles authentication, trade execution, holdings tracking, fund transfers, and live market data.
 
 ---
 
