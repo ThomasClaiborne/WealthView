@@ -31,7 +31,7 @@ INSERT INTO bank_account (app_user_id, bank_name, nickname, balance, is_active, 
 --   Total holdings = 8812.20
 -- Cash + holdings ≈ 27600 total portfolio on May 20
 UPDATE portfolio
-SET cash_balance = 18812.43,
+SET cash_balance = 20500.50,
     created_at   = '2026-04-20 09:00:00'
 WHERE app_user_id = 1;
 
@@ -112,4 +112,8 @@ INSERT INTO portfolio_snapshot (portfolio_id, snapshot_date, total_value) VALUES
 (1, '2026-05-16', 32780.00),
 (1, '2026-05-17', 27190.00),
 (1, '2026-05-18', 27350.00),
-(1, '2026-05-19', 27480.00);
+(1, '2026-05-19', 27480.00),
+(1, '2026-05-20', 27724.01),
+(1, '2026-05-21', 27900.26);
+
+UPDATE portfolio_snapshot SET total_value = 28139.99 WHERE portfolio_id = 1 AND snapshot_date = '2026-05-22';
